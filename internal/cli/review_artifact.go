@@ -213,6 +213,9 @@ func RunReviewCaptureResult(args []string, stdout io.Writer) error {
 			if !isHostRelayMaterializeTransport {
 				return reviewPreflightError(fmt.Errorf("review capture-result --materialize is unavailable for %q: printing the Go-materialized provider task is the host-relay form, and this runtime's compiled transport is %q; collect its reviewer result through that live host transport instead", providerRuntime, providerTransport)) // refusal:by-design world-action: only a host relay collects a printed provider task
 			}
+			if err := reviewCaptureMaterializeRuntimeGate(providerRuntime); err != nil {
+				return reviewPreflightError(err)
+			}
 		} else if hostRelaySubmission {
 			if !isHostRelayMaterializeTransport {
 				return reviewPreflightError(fmt.Errorf("review capture-result --agent %q with --input is unavailable: only a compiled host-relay runtime may submit its raw reviewer result with the provider-owned runtime binding; this runtime's compiled transport is %q", providerRuntime, providerTransport)) // refusal:by-design world-action: caller input cannot impersonate an in-process provider runtime

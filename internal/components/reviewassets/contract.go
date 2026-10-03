@@ -39,7 +39,7 @@ const compiledCapture = "For each returned `review.capture-result` input, run it
 const VSCodeReviewerAgentName = "gentle-reviewer"
 
 // VSCodeReviewerAgentFileName is the file the native installer writes into the
-// VS Code user prompts folder (agents.Adapter.SubAgentsDir) for the reviewer.
+// Copilot user agents folder (agents.Adapter.SubAgentsDir) for the reviewer.
 const VSCodeReviewerAgentFileName = VSCodeReviewerAgentName + ".agent.md"
 
 const vscodeCapture = "For each returned `review.capture-result` input, relay one isolated reviewer through VS Code Copilot Chat. " +

@@ -3243,6 +3243,11 @@ func backupTargets(homeDir, workspaceDir string, scope InstallScope, selection m
 			for _, name := range names {
 				paths[filepath.Join(dir, name)] = struct{}{}
 			}
+			// A relocated agent's old copy and that folder's ledger may be
+			// removed or rewritten by the installer's migration.
+			for _, path := range reviewassets.RelocatedNativeAgentPaths(componentInjectionDirScoped(homeDir, workspaceDir, scope, adapter), adapter) {
+				paths[path] = struct{}{}
+			}
 		}
 		if adapter.Agent() == model.AgentOpenCode {
 			pluginsDir := filepath.Join(adapter.GlobalConfigDir(homeDir), "plugins")

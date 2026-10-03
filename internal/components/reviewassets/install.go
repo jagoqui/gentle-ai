@@ -27,7 +27,7 @@ var NativeAgentManifest = map[model.AgentID][]string{
 	model.AgentKiroIDE:    {"jd-fix-agent.md", "jd-judge-a.md", "jd-judge-b.md"},
 	model.AgentKimi:       {"gentleman.yaml"},
 	// The VS Code relay reviewer is tool-less and installs verbatim (see
-	// renderNativeAgent); it is the only agent written to the VS Code folder.
+	// renderNativeAgent); it is the only agent written to the Copilot agents folder.
 	model.AgentVSCodeCopilot: {VSCodeReviewerAgentFileName},
 }
 
@@ -40,6 +40,49 @@ var RetiredNativeAgentManifest = map[model.AgentID][]string{
 	model.AgentCursor:  {"review-readability.md", "review-refuter.md", "review-reliability.md", "review-resilience.md", "review-risk.md"},
 	model.AgentKiroIDE: {"review-readability.md", "review-refuter.md", "review-reliability.md", "review-resilience.md", "review-risk.md"},
 	model.AgentKimi:    {"review-readability.md", "review-readability.yaml", "review-refuter.md", "review-refuter.yaml", "review-reliability.md", "review-reliability.yaml", "review-resilience.md", "review-resilience.yaml", "review-risk.md", "review-risk.yaml"},
+}
+
+// relocatedNativeAgentManifest lists native agents an earlier release
+// installed into a different directory than adapter.SubAgentsDir resolves
+// today (see relocatedNativeAgentDir). The installer removes the old copy only
+// when Gentle AI owns it there, under the same rule as a retired agent, and
+// drops it from that directory's ownership ledger.
+var relocatedNativeAgentManifest = map[model.AgentID][]string{
+	// Earlier builds wrote the VS Code relay reviewer into the VS Code user
+	// prompts folder; it now lives in the Copilot user agents folder.
+	model.AgentVSCodeCopilot: {VSCodeReviewerAgentFileName},
+}
+
+// relocatedNativeAgentDir is the directory an earlier release installed the
+// runtime's relocated native agents into, or "" when none moved. It never
+// equals the current adapter.SubAgentsDir.
+func relocatedNativeAgentDir(home string, adapter agents.Adapter) string {
+	if len(relocatedNativeAgentManifest[adapter.Agent()]) == 0 {
+		return ""
+	}
+	var dir string
+	if adapter.Agent() == model.AgentVSCodeCopilot {
+		dir = adapter.SystemPromptDir(home)
+	}
+	if dir == "" || filepath.Clean(dir) == filepath.Clean(adapter.SubAgentsDir(home)) {
+		return ""
+	}
+	return dir
+}
+
+// RelocatedNativeAgentPaths lists every file the relocation cleanup in
+// InstallNativeAgents may remove or rewrite (the old agent copies and that
+// directory's ownership ledger), so a caller can snapshot them before it runs.
+func RelocatedNativeAgentPaths(home string, adapter agents.Adapter) []string {
+	dir := relocatedNativeAgentDir(home, adapter)
+	if dir == "" {
+		return nil
+	}
+	paths := make([]string, 0, len(relocatedNativeAgentManifest[adapter.Agent()])+1)
+	for _, name := range relocatedNativeAgentManifest[adapter.Agent()] {
+		paths = append(paths, filepath.Join(dir, name))
+	}
+	return append(paths, ledgerPath(dir))
 }
 
 // NativeAgentsSupported reports whether the native agent installer handles a
@@ -80,8 +123,24 @@ type claudeModelResolver interface {
 
 // InstallNativeAgents installs only retained review, Judgment Day, and Kimi native agents.
 // It never removes legacy SDD files or user-owned agents; it removes only the
-// retired review agents Gentle AI owns (see RetiredNativeAgentManifest).
+// retired review agents Gentle AI owns (see RetiredNativeAgentManifest) and,
+// once the current directory is installed, the owned copies an earlier release
+// left in a relocated agent's old directory (see relocatedNativeAgentManifest).
 func InstallNativeAgents(home string, adapter agents.Adapter, opts InstallOptions) (InstallResult, error) {
+	result, err := installNativeAgents(home, adapter, opts)
+	if err != nil {
+		return result, err
+	}
+	// The relocation cleanup runs only after the current directory holds the
+	// managed agents, so a failure never leaves the runtime without them; it
+	// journals its own directory and is retried idempotently on the next run.
+	relocated, err := removeRelocatedNativeAgents(home, adapter, opts)
+	result.Changed = result.Changed || relocated.Changed
+	result.Files = append(result.Files, relocated.Files...)
+	return result, err
+}
+
+func installNativeAgents(home string, adapter agents.Adapter, opts InstallOptions) (InstallResult, error) {
 	if !NativeAgentsSupported(adapter.Agent()) {
 		return InstallResult{}, fmt.Errorf("unsupported native agent runtime: %s", adapter.Agent())
 	}
@@ -215,6 +274,75 @@ func InstallNativeAgents(home string, adapter agents.Adapter, opts InstallOption
 		result.Changed = true
 		result.Files = append(result.Files, ledgerFile)
 	}
+	return result, nil
+}
+
+// removeRelocatedNativeAgents removes, from the directory an earlier release
+// installed them into, the relocated agents Gentle AI owns there (its ledger
+// records their exact bytes, or the bytes equal the managed render) and drops
+// them from that directory's ownership ledger, removing the ledger once it
+// owns nothing. Every other file there, including an unowned agent under the
+// same name, is preserved, and no ledger is ever created.
+func removeRelocatedNativeAgents(home string, adapter agents.Adapter, opts InstallOptions) (InstallResult, error) {
+	dir := relocatedNativeAgentDir(home, adapter)
+	if dir == "" {
+		return InstallResult{}, nil
+	}
+	if _, err := os.Lstat(dir); os.IsNotExist(err) {
+		return InstallResult{}, nil
+	}
+	names := relocatedNativeAgentManifest[adapter.Agent()]
+	managed := make(map[string]string, len(names))
+	for _, name := range names {
+		content, err := renderNativeAgent(adapter, name, opts)
+		if err != nil {
+			return InstallResult{}, err
+		}
+		managed[name] = content
+	}
+	ledgerFile := ledgerPath(dir)
+	journal := mutationjournal.New(dir)
+	if err := journal.Capture(ledgerFile); err != nil {
+		return InstallResult{}, fmt.Errorf("capture relocated ownership ledger: %w", err)
+	}
+	ledger, ledgerExists, err := readOwnership(ledgerFile, names)
+	if err != nil {
+		return InstallResult{}, fmt.Errorf("relocated native agents in %s: %w", dir, err)
+	}
+	result := InstallResult{}
+	rollback := func(err error) (InstallResult, error) {
+		return InstallResult{}, errors.Join(err, journal.Restore())
+	}
+	ledgerChanged := false
+	for _, name := range names {
+		removed, dropped, err := removeRetiredNativeAgent(journal, dir, name, ledger, managed[name])
+		if err != nil {
+			return rollback(err)
+		}
+		if removed != "" {
+			result.Changed = true
+			result.Files = append(result.Files, removed)
+		}
+		ledgerChanged = ledgerChanged || dropped
+	}
+	if !ledgerChanged || !ledgerExists {
+		return result, nil
+	}
+	if len(ledger.Files) == 0 {
+		if _, err := journal.Remove(ledgerFile); err != nil {
+			return rollback(fmt.Errorf("remove relocated ownership ledger: %w", err))
+		}
+	} else {
+		encoded, err := json.MarshalIndent(ledger, "", "  ")
+		if err != nil {
+			return rollback(fmt.Errorf("encode relocated ownership ledger: %w", err))
+		}
+		if _, err := journal.WriteWithMode(ledgerFile, append(encoded, '\n'), 0o644); err != nil {
+			return rollback(fmt.Errorf("write relocated ownership ledger: %w", err))
+		}
+	}
+	result.Changed = true
+	result.Files = append(result.Files, ledgerFile)
 	return result, nil
 }
 

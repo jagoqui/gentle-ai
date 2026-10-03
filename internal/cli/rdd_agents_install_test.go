@@ -73,16 +73,16 @@ func TestFreshInstallShipsReviewAgentsOnlyToRDDRuntimes(t *testing.T) {
 
 // TestFreshInstallShipsVSCodeReviewerAgent installs VS Code Copilot and checks
 // that its single tool-less relay reviewer lands, byte-identical to the
-// embedded asset, beside the instructions file in the VS Code user prompts
-// folder, without any Claude review or Judgment Day agent, and that a second
-// install leaves it unchanged.
+// embedded asset, in the Copilot user agents folder (`~/.copilot/agents`),
+// without any Claude review or Judgment Day agent, and that a second install
+// leaves it unchanged.
 func TestFreshInstallShipsVSCodeReviewerAgent(t *testing.T) {
 	home := t.TempDir()
 	selection := model.Selection{Agents: []model.AgentID{model.AgentVSCodeCopilot}}
 	adapter := resolveAdapters(selection.Agents)[0]
 	dir := adapter.SubAgentsDir(home)
-	if dir != filepath.Dir(adapter.SystemPromptFile(home)) {
-		t.Fatalf("vscode SubAgentsDir = %q, want the prompts folder %q", dir, filepath.Dir(adapter.SystemPromptFile(home)))
+	if want := filepath.Join(home, ".copilot", "agents"); dir != want {
+		t.Fatalf("vscode SubAgentsDir = %q, want the Copilot user agents folder %q", dir, want)
 	}
 	path := filepath.Join(dir, reviewassets.VSCodeReviewerAgentName+".agent.md")
 	want := assets.MustRead("vscode/agents/gentle-reviewer.agent.md")

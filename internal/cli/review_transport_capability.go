@@ -102,7 +102,7 @@ func reviewImmutableRuntimeCapability(agent model.AgentID) reviewImmutableRuntim
 		// VS Code has no launcher process that could export a relay
 		// handshake. Its required conjunct is the relay's own executor: the
 		// managed tool-less `gentle-reviewer` agent must be installed
-		// byte-identical in the VS Code user prompts folder, or STATUS would
+		// byte-identical in the Copilot user agents folder, or STATUS would
 		// offer a materialize/--input relay no installed reviewer can run
 		// (and a tampered agent could carry tools). It can only narrow the
 		// compiled boundary, never expand it. The bound capture still refuses
@@ -281,11 +281,14 @@ func reviewRuntimeWithImmutableTransport(agent string) (model.AgentID, error) {
 // never the gate.
 //
 // vscode-copilot follows the same precedent for its installed-reviewer-agent
-// gate: START and STATUS (including the --materialize offer) still require the
-// managed `gentle-reviewer` agent, but a --input capture carrying a genuine
-// bound transaction does not, so deleting or editing that agent mid-lineage
-// never strands an already-frozen lineage (a transport failure must not), and
-// Go admission alone still decides what the submitted bytes are worth.
+// gate, which this capability skips: a --input submission carrying a genuine
+// bound transaction never requires the managed `gentle-reviewer` agent, so
+// deleting or editing that agent mid-lineage never strands a result the host
+// already produced (a transport failure must not), and Go admission alone
+// still decides what the submitted bytes are worth. START and STATUS
+// (including the --materialize offer) still require the agent, and so does an
+// explicit --materialize=true capture, which re-checks it through
+// reviewCaptureMaterializeRuntimeGate before printing any prompt bytes.
 func reviewCaptureBoundRuntimeCapability(agent model.AgentID) reviewImmutableRuntimePolicy {
 	var transport reviewImmutableTransport
 	switch agent {

@@ -51,6 +51,11 @@ No Node, no CLI: everything on the gentle-ai side is Go.
   `gentle-ai sync --agent vscode-copilot` (covers eligibility-unconditional + tamper side of isolation-unproved;
   runtime zero-tools proof stays T3); (b) audit every `SubAgentsDir` consumer and guarantee cleanup/uninstall/backup
   never touch non-managed files in the shared prompts folder, with tests. Route: delegated direct.
+- [x] T5 — Second review follow-ups (user-authorized 2026-10-03): (a) install `gentle-reviewer.agent.md` into
+  `~/.copilot/agents` (VS Code default user agent folder per `chat.agentFilesLocations`; independent of
+  XDG_CONFIG_HOME/%APPDATA%), migrate the owned file out of the VS Code user prompts folder, gate checks the new path;
+  (b) explicit `--materialize=true` capture for vscode-copilot re-checks the managed agent gate (`--input` submission
+  stays ungated, Pi precedent). Route: delegated direct.
 - [ ] T3 — Organic proof in VS Code Copilot Chat: positive capture and zero-tools confirmation. Pending: user env.
 
 ## Acceptance criteria
@@ -115,6 +120,24 @@ No Node, no CLI: everything on the gentle-ai side is Go.
   targets, gated consumers, complete/partial uninstall.
   Checks: gofmt clean; `go vet ./internal/...` clean; `go build ./...` ok; agents/components/model/reviewerprovider
   41 packages ok; `go test ./internal/cli/...` ok (402.9s).
+- T5 (delegated writer, uncommitted): RED observed: `TestSubAgentsDirIsCopilotUserAgentsFolder` failed (SubAgentsDir
+  = `<home>/.config/Code/User/prompts`); reviewassets compile failure (undefined `RelocatedNativeAgentPaths`); cli
+  vet failure (undefined `reviewCaptureMaterializeRuntimeGate`), then with a no-op stub
+  `TestVSCodeMaterializeCaptureRequiresTheManagedReviewerAgent` (missing/modified printed the prompt),
+  `TestPiMaterializeCaptureIgnoresTheVSCodeReviewerAgentGate`, and both `TestVSCodePromptsFolder*` tests failed.
+  GREEN after implementation.
+  (a) vscode `SubAgentsDir` = `GlobalConfigDir/agents` = `~/.copilot/agents` on every OS (no XDG/APPDATA). Migration
+  seam in reviewassets: `relocatedNativeAgentManifest[vscode-copilot] = {gentle-reviewer.agent.md}` with old dir
+  `SystemPromptDir(home)`; `InstallNativeAgents` installs the new location first, then removes the old copy only when
+  owned (ledger hash match or managed bytes, same rule as retired agents via `removeRetiredNativeAgent`), drops it from
+  the old ledger and removes that ledger when empty; never creates a ledger; own journal; idempotent.
+  `RelocatedNativeAgentPaths` feeds install (`run.go` backupTargets) and sync (`sync.go` syncBackupTargetsScoped)
+  snapshots. Gate derives from `SubAgentsDir` (unchanged code); guidance now says "Copilot user agents folder".
+  (b) `reviewCaptureMaterializeRuntimeGate` (vscode-only; reuses `reviewRuntimeWithImmutableTransport` refusal)
+  runs on the `--materialize=true` branches of capture-result and capture-refuter/capture-validation; `--input` stays
+  ungated; Pi/OpenCode/Claude/Codex unaffected. Misleading capability comment fixed.
+  Checks: gofmt clean; `go vet ./internal/...` clean; `go build ./...` ok; agents/components/model/reviewerprovider
+  41 packages ok; `go test ./internal/cli/...` 3159 passed; `go test ./internal/update/...` 479 passed.
 
 ## Next step
 

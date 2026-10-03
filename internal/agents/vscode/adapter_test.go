@@ -158,12 +158,14 @@ func TestMCPConfigPathUsesVSCodeUserProfile(t *testing.T) {
 	}
 }
 
-// TestSubAgentsDirIsVSCodeUserPromptsFolder pins where the RDD relay reviewer
-// custom agent lands: the VS Code user prompts folder that also holds the
-// instructions file, resolved per OS. SDD file sub-agents stay unsupported.
-func TestSubAgentsDirIsVSCodeUserPromptsFolder(t *testing.T) {
+// TestSubAgentsDirIsCopilotUserAgentsFolder pins where the RDD relay reviewer
+// custom agent lands: `~/.copilot/agents`, a default entry of VS Code's
+// `chat.agentFilesLocations` user agent folders. It is anchored to the home
+// directory on every OS and never follows XDG_CONFIG_HOME or APPDATA, which
+// only relocate the VS Code user profile. SDD file sub-agents stay unsupported.
+func TestSubAgentsDirIsCopilotUserAgentsFolder(t *testing.T) {
 	a := NewAdapter()
-	home := "/tmp/home"
+	home := t.TempDir()
 
 	if a.SupportsSubAgents() {
 		t.Fatal("SupportsSubAgents() = true; only the native RDD reviewer installs here")
@@ -172,22 +174,26 @@ func TestSubAgentsDirIsVSCodeUserPromptsFolder(t *testing.T) {
 		t.Fatalf("EmbeddedSubAgentsDir() = %q, want %q", got, want)
 	}
 
-	var want string
-	switch runtime.GOOS {
-	case "darwin":
-		want = filepath.Join(home, "Library", "Application Support", "Code", "User", "prompts")
-	case "windows":
-		appData := filepath.Join(home, "AppData", "Roaming")
-		t.Setenv("APPDATA", appData)
-		want = filepath.Join(appData, "Code", "User", "prompts")
-	default:
-		t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
-		want = filepath.Join(home, ".config", "Code", "User", "prompts")
-	}
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
+	t.Setenv("APPDATA", filepath.Join(home, "appdata"))
+	want := filepath.Join(home, ".copilot", "agents")
 	if got := a.SubAgentsDir(home); got != want {
 		t.Fatalf("SubAgentsDir() = %q, want %q", got, want)
 	}
-	if got := a.SubAgentsDir(home); got != filepath.Dir(a.SystemPromptFile(home)) {
-		t.Fatalf("SubAgentsDir() = %q, want the instructions folder", got)
+	if got := a.SubAgentsDir(home); filepath.Dir(got) != a.GlobalConfigDir(home) {
+		t.Fatalf("SubAgentsDir() = %q, want a child of the Copilot config dir %q", got, a.GlobalConfigDir(home))
+	}
+	if got := a.SubAgentsDir(home); got == a.SystemPromptDir(home) {
+		t.Fatalf("SubAgentsDir() = %q still resolves the VS Code user prompts folder", got)
+	}
+
+	// The real user home ignores XDG_CONFIG_HOME and APPDATA too: the Copilot
+	// user agent folder is not part of the VS Code user profile.
+	realHome, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("UserHomeDir() error = %v", err)
+	}
+	if got, want := a.SubAgentsDir(realHome), filepath.Join(realHome, ".copilot", "agents"); got != want {
+		t.Fatalf("SubAgentsDir(realHome) = %q, want %q", got, want)
 	}
 }

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -10,6 +12,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/vscode"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/reviewassets"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/reviewtransaction"
 )
 
 // useVSCodeReviewerAgentHome points the vscode relay eligibility gate at a
@@ -154,8 +157,11 @@ func TestVSCodeReviewerAgentGuidanceSurvivesTheFailureCausePrivacyGate(t *testin
 }
 
 // TestVSCodeCaptureBoundEligibilitySkipsTheReviewerAgentGate follows Pi's
-// capture-time precedent (#4256): a capture already carries its own frozen
-// binding, so removing the reviewer agent mid-lineage never strands it.
+// capture-time precedent (#4256) for the bound `--input` submission: a capture
+// already carries its own frozen binding, so removing the reviewer agent
+// mid-lineage never strands a reviewer result the host already produced. An
+// explicit `--materialize=true` capture is gated separately
+// (TestVSCodeMaterializeCaptureRequiresTheManagedReviewerAgent).
 func TestVSCodeCaptureBoundEligibilitySkipsTheReviewerAgentGate(t *testing.T) {
 	useVSCodeReviewerAgentHome(t)
 	capability := reviewCaptureBoundRuntimeCapability(model.AgentVSCodeCopilot)
@@ -164,6 +170,119 @@ func TestVSCodeCaptureBoundEligibilitySkipsTheReviewerAgentGate(t *testing.T) {
 	}
 	if identity, err := reviewCaptureRuntimeWithBoundTransport(string(model.AgentVSCodeCopilot)); err != nil || identity != model.AgentVSCodeCopilot {
 		t.Fatalf("capture-bound vscode-copilot = %q, %v", identity, err)
+	}
+}
+
+// TestVSCodeMaterializeCaptureRequiresTheManagedReviewerAgent closes the
+// capture-time side of the installed-reviewer gate: an explicit
+// `--materialize=true` capture (lens, refuter, and targeted validator) prints
+// the reviewer prompt only while the managed `gentle-reviewer` agent is
+// installed byte-identical, because that print is what the host hands to the
+// subagent. A missing or modified agent refuses with the typed sync guidance
+// and prints no prompt bytes, while the bound `--input` submission of a result
+// the host already produced stays admitted (Pi precedent #4256).
+func TestVSCodeMaterializeCaptureRequiresTheManagedReviewerAgent(t *testing.T) {
+	path := installVSCodeReviewerAgentForTest(t)
+	reviewEnabledHome(t)
+	t.Setenv(reviewPiHostRelayContractEnvironment, "")
+	repo, args, record, _ := newCandidateInspectionReview(t, "candidate\n", true)
+	binding := piHostRelayCaptureBinding(t, repo, args, record)
+	lens := record.State.SelectedLenses[0]
+	agent := string(model.AgentVSCodeCopilot)
+	managed := mustReadFile(t, path)
+	roleBinding := []string{
+		"--cwd", repo, "--repository-context", "provider-issued-context", "--lineage", record.State.LineageID,
+		"--target", "provider-issued-target", "--expected-revision", record.State.CapturePhaseRevision,
+		"--agent", agent, "--materialize=true",
+	}
+
+	for _, test := range []struct {
+		name    string
+		arrange func(t *testing.T)
+		state   reviewVSCodeReviewerAgentState
+	}{
+		{name: "missing", arrange: func(t *testing.T) {
+			if err := os.Remove(path); err != nil {
+				t.Fatal(err)
+			}
+		}, state: reviewVSCodeReviewerAgentMissing},
+		{name: "modified", arrange: func(t *testing.T) {
+			mustWriteFile(t, path, append(slices.Clone(managed), '\n'))
+		}, state: reviewVSCodeReviewerAgentModified},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			test.arrange(t)
+			t.Cleanup(func() { mustWriteFile(t, path, managed) })
+			captures := map[string]func(io.Writer) error{
+				"capture-result": func(w io.Writer) error {
+					return RunReviewCaptureResult(append(slices.Clone(binding), "--agent", agent, "--materialize=true"), w)
+				},
+				"capture-refuter": func(w io.Writer) error { return RunReviewCaptureRefuter(slices.Clone(roleBinding), w) },
+				"capture-validation": func(w io.Writer) error {
+					return RunReviewCaptureValidation(append(slices.Clone(roleBinding), "--request-hash", strings.Repeat("a", 64)), w)
+				},
+			}
+			for command, capture := range captures {
+				var printed bytes.Buffer
+				err := capture(&printed)
+				if err == nil {
+					t.Fatalf("%s --materialize=true with a %s reviewer agent printed the prompt", command, test.state)
+				}
+				for _, want := range []string{"gentle-ai sync --agent vscode-copilot", reviewassets.VSCodeReviewerAgentFileName, string(test.state)} {
+					if !strings.Contains(err.Error(), want) {
+						t.Fatalf("%s refusal %q does not name %q", command, err, want)
+					}
+				}
+				if printed.Len() != 0 {
+					t.Fatalf("%s refusal still printed %d prompt bytes", command, printed.Len())
+				}
+			}
+		})
+	}
+
+	// With the managed agent back in place the same capture prints the prompt.
+	var printed bytes.Buffer
+	if err := RunReviewCaptureResult(append(slices.Clone(binding), "--agent", agent, "--materialize=true"), &printed); err != nil || printed.Len() == 0 {
+		t.Fatalf("vscode materialize with the installed agent = %d bytes, %v", printed.Len(), err)
+	}
+
+	// The bound --input submission of an already-produced result stays
+	// admitted with the agent missing: an in-flight lineage is never stranded.
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	resultFile := filepath.Join(t.TempDir(), "vscode-result.json")
+	if err := os.WriteFile(resultFile, admittedReviewerPayloadForTest(t, repo, record, lens, 0), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if err := RunReviewCaptureResult(append(slices.Clone(binding), "--agent", agent, "--input", resultFile), &output); err != nil {
+		t.Fatalf("vscode --input submission without the reviewer agent refused: %v", err)
+	}
+	var terminal reviewLastEventClosureResult
+	decodeStrictReviewJSON(t, output.Bytes(), &terminal)
+	if terminal.Operation != "review/capture-result" || terminal.State != reviewtransaction.StateApproved {
+		t.Fatalf("submitted vscode reviewer terminal result = %#v", terminal)
+	}
+}
+
+// TestPiMaterializeCaptureIgnoresTheVSCodeReviewerAgentGate keeps the
+// materialize gate scoped to vscode-copilot: Pi's capture-time eligibility
+// still derives from the bound transaction alone (#4256), whatever the VS Code
+// reviewer agent's state.
+func TestPiMaterializeCaptureIgnoresTheVSCodeReviewerAgentGate(t *testing.T) {
+	useVSCodeReviewerAgentHome(t)
+	t.Setenv(reviewPiHostRelayContractEnvironment, "")
+	if err := reviewCaptureMaterializeRuntimeGate(model.AgentPi); err != nil {
+		t.Fatalf("pi materialize depends on the vscode reviewer agent: %v", err)
+	}
+	for _, runtime := range []model.AgentID{model.AgentClaudeCode, model.AgentCodex, model.AgentOpenCode} {
+		if err := reviewCaptureMaterializeRuntimeGate(runtime); err != nil {
+			t.Fatalf("%s materialize depends on the vscode reviewer agent: %v", runtime, err)
+		}
+	}
+	if err := reviewCaptureMaterializeRuntimeGate(model.AgentVSCodeCopilot); err == nil {
+		t.Fatal("vscode-copilot materialize without the reviewer agent passed the gate")
 	}
 }
 

@@ -82,9 +82,9 @@ func TestVSCodeReviewerAgentNameMatchesContract(t *testing.T) {
 }
 
 // TestInstallNativeAgentsWritesVSCodeReviewerVerbatim proves the reviewer lands
-// in the VS Code user prompts folder byte-identical to the embedded asset (no
-// tool grant or guidance injection, even with CodeGraph selected) and that a
-// second install is a no-op.
+// in the Copilot user agents folder (`~/.copilot/agents`) byte-identical to the
+// embedded asset (no tool grant or guidance injection, even with CodeGraph
+// selected) and that a second install is a no-op.
 func TestInstallNativeAgentsWritesVSCodeReviewerVerbatim(t *testing.T) {
 	adapter, err := agents.NewAdapter(model.AgentVSCodeCopilot)
 	if err != nil {
@@ -92,8 +92,8 @@ func TestInstallNativeAgentsWritesVSCodeReviewerVerbatim(t *testing.T) {
 	}
 	home := t.TempDir()
 	dir := adapter.SubAgentsDir(home)
-	if want := filepath.Join(filepath.Dir(adapter.SystemPromptFile(home)), "gentle-reviewer.agent.md"); filepath.Join(dir, "gentle-reviewer.agent.md") != want {
-		t.Fatalf("SubAgentsDir(%q) = %q, want the prompts folder of %q", home, dir, want)
+	if want := filepath.Join(home, ".copilot", "agents"); dir != want {
+		t.Fatalf("SubAgentsDir(%q) = %q, want the Copilot user agents folder %q", home, dir, want)
 	}
 	opts := InstallOptions{CodeGraphGuidanceMarkdown: "## CodeGraph\n\nUse codegraph_explore.\n"}
 
@@ -168,12 +168,12 @@ func TestManagedVSCodeReviewerAgentIsTheInstalledRender(t *testing.T) {
 	}
 }
 
-// TestInstallNativeAgentsPreservesVSCodePromptsFolderUserFiles proves the
+// TestInstallNativeAgentsPreservesVSCodeAgentsFolderUserFiles proves the
 // native installer touches only the managed reviewer and its ownership ledger
-// in the shared VS Code user prompts folder: the gentle-ai instructions file,
-// a user's own custom agent, and a user prompt stay byte-identical across a
-// first install, a managed-file refresh, and an idempotent re-run.
-func TestInstallNativeAgentsPreservesVSCodePromptsFolderUserFiles(t *testing.T) {
+// in the shared Copilot user agents folder: a user's own custom agents stay
+// byte-identical across a first install, a managed-file refresh, and an
+// idempotent re-run.
+func TestInstallNativeAgentsPreservesVSCodeAgentsFolderUserFiles(t *testing.T) {
 	adapter, err := agents.NewAdapter(model.AgentVSCodeCopilot)
 	if err != nil {
 		t.Fatal(err)
@@ -184,9 +184,8 @@ func TestInstallNativeAgentsPreservesVSCodePromptsFolderUserFiles(t *testing.T) 
 		t.Fatal(err)
 	}
 	userFiles := map[string]string{
-		"gentle-ai.instructions.md": "managed instructions owned by another component\n",
-		"my-agent.agent.md":         "---\nname: my-agent\ntools: ['codebase']\n---\nmine\n",
-		"notes.prompt.md":           "---\nmode: ask\n---\nnotes\n",
+		"my.agent.md":   "---\nname: my\ntools: ['codebase']\n---\nmine\n",
+		"other-tool.md": "an unrelated file another tool keeps here\n",
 	}
 	for name, content := range userFiles {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
@@ -210,7 +209,7 @@ func TestInstallNativeAgentsPreservesVSCodePromptsFolderUserFiles(t *testing.T) 
 				continue
 			}
 			if entry.Name() != VSCodeReviewerAgentFileName && entry.Name() != OwnershipLedgerFilename {
-				t.Fatalf("%s: unexpected file %s in the prompts folder", stage, entry.Name())
+				t.Fatalf("%s: unexpected file %s in the agents folder", stage, entry.Name())
 			}
 		}
 	}
@@ -261,4 +260,154 @@ func mustManagedVSCodeReviewer(t *testing.T, adapter agents.Adapter) []byte {
 		t.Fatal(err)
 	}
 	return managed
+}
+
+// seedRetiredVSCodePromptsReviewer installs the reviewer into the VS Code user
+// prompts folder exactly as the release that placed it there did: the managed
+// bytes plus an ownership ledger recording them, next to the user's own files.
+func seedRetiredVSCodePromptsReviewer(t *testing.T, adapter agents.Adapter, home string, reviewer []byte, owned bool) (string, map[string]string) {
+	t.Helper()
+	dir := adapter.SystemPromptDir(home)
+	userFiles := map[string]string{
+		"gentle-ai.instructions.md": "# My own Copilot instructions\n",
+		"my-agent.agent.md":         "---\nname: my-agent\ntools: ['codebase']\n---\nmine\n",
+		"notes.prompt.md":           "---\nmode: ask\n---\nnotes\n",
+	}
+	for name, content := range userFiles {
+		writeTestFile(t, filepath.Join(dir, name), []byte(content))
+	}
+	writeTestFile(t, filepath.Join(dir, VSCodeReviewerAgentFileName), reviewer)
+	if owned {
+		ledger := "{\n  \"version\": 1,\n  \"files\": {\n    \"" + VSCodeReviewerAgentFileName + "\": \"" + installedHash(reviewer) + "\"\n  }\n}\n"
+		writeTestFile(t, filepath.Join(dir, OwnershipLedgerFilename), []byte(ledger))
+	}
+	return dir, userFiles
+}
+
+func writeTestFile(t *testing.T, path string, data []byte) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertTestFiles(t *testing.T, dir string, files map[string]string, stage string) {
+	t.Helper()
+	for name, want := range files {
+		got, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil || string(got) != want {
+			t.Fatalf("%s: %s = %q, %v; want byte-identical %q", stage, name, got, err, want)
+		}
+	}
+}
+
+// TestInstallNativeAgentsMigratesTheOwnedVSCodeReviewerOutOfThePromptsFolder
+// covers the relocation from the VS Code user prompts folder, which Copilot
+// Chat is not established to scan for custom agents, to `~/.copilot/agents`.
+// An owned reviewer left in the prompts folder (the ledger records its bytes,
+// even an older managed render) is removed and dropped from that folder's
+// ledger, which goes away once it owns nothing; every other file there stays
+// byte-identical, and a re-run changes nothing.
+func TestInstallNativeAgentsMigratesTheOwnedVSCodeReviewerOutOfThePromptsFolder(t *testing.T) {
+	adapter, err := agents.NewAdapter(model.AgentVSCodeCopilot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name     string
+		reviewer func(t *testing.T) []byte
+	}{
+		{name: "current managed render", reviewer: func(t *testing.T) []byte { return mustManagedVSCodeReviewer(t, adapter) }},
+		{name: "older managed render", reviewer: func(*testing.T) []byte {
+			return []byte("---\nname: gentle-reviewer\ntools: []\n---\nolder managed body\n")
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			home := t.TempDir()
+			oldDir, userFiles := seedRetiredVSCodePromptsReviewer(t, adapter, home, test.reviewer(t), true)
+
+			result, err := InstallNativeAgents(home, adapter, InstallOptions{})
+			if err != nil {
+				t.Fatalf("InstallNativeAgents() error = %v", err)
+			}
+			oldReviewer := filepath.Join(oldDir, VSCodeReviewerAgentFileName)
+			oldLedger := filepath.Join(oldDir, OwnershipLedgerFilename)
+			for _, path := range []string{oldReviewer, oldLedger} {
+				if _, err := os.Lstat(path); !os.IsNotExist(err) {
+					t.Fatalf("%s survived the migration: %v", path, err)
+				}
+				if !containsName(result.Files, path) {
+					t.Fatalf("install result %v does not report removing %s", result.Files, path)
+				}
+			}
+			assertTestFiles(t, oldDir, userFiles, "migration")
+			newReviewer, err := os.ReadFile(filepath.Join(adapter.SubAgentsDir(home), VSCodeReviewerAgentFileName))
+			if err != nil || string(newReviewer) != string(mustManagedVSCodeReviewer(t, adapter)) {
+				t.Fatalf("relocated reviewer = %q, %v", newReviewer, err)
+			}
+
+			again, err := InstallNativeAgents(home, adapter, InstallOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if again.Changed || len(again.Files) != 0 {
+				t.Fatalf("migration re-run = %+v, want no change", again)
+			}
+			assertTestFiles(t, oldDir, userFiles, "migration re-run")
+		})
+	}
+}
+
+// TestInstallNativeAgentsKeepsAnUnownedVSCodePromptsReviewer proves the
+// migration never deletes a prompts-folder `gentle-reviewer.agent.md` Gentle
+// AI does not own: without a ledger entry or the managed bytes it is the
+// user's file and stays byte-identical, and no ledger is created for it.
+func TestInstallNativeAgentsKeepsAnUnownedVSCodePromptsReviewer(t *testing.T) {
+	adapter, err := agents.NewAdapter(model.AgentVSCodeCopilot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	mine := "---\nname: gentle-reviewer\ntools: ['codebase']\n---\nmy own reviewer\n"
+	oldDir, userFiles := seedRetiredVSCodePromptsReviewer(t, adapter, home, []byte(mine), false)
+	userFiles[VSCodeReviewerAgentFileName] = mine
+
+	for run := 0; run < 2; run++ {
+		if _, err := InstallNativeAgents(home, adapter, InstallOptions{}); err != nil {
+			t.Fatalf("InstallNativeAgents() error = %v", err)
+		}
+		assertTestFiles(t, oldDir, userFiles, "unowned prompts reviewer")
+		if _, err := os.Lstat(filepath.Join(oldDir, OwnershipLedgerFilename)); !os.IsNotExist(err) {
+			t.Fatalf("migration created a prompts-folder ledger: %v", err)
+		}
+	}
+}
+
+// TestRelocatedNativeAgentPathsNameOnlyTheVSCodePromptsReviewer pins the
+// backup targets install and sync snapshot for the migration: the prompts
+// folder's reviewer and ledger for vscode-copilot, nothing for other runtimes.
+func TestRelocatedNativeAgentPathsNameOnlyTheVSCodePromptsReviewer(t *testing.T) {
+	home := t.TempDir()
+	adapter, err := agents.NewAdapter(model.AgentVSCodeCopilot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := adapter.SystemPromptDir(home)
+	got := RelocatedNativeAgentPaths(home, adapter)
+	want := []string{filepath.Join(dir, VSCodeReviewerAgentFileName), filepath.Join(dir, OwnershipLedgerFilename)}
+	if len(got) != len(want) || !containsName(got, want[0]) || !containsName(got, want[1]) {
+		t.Fatalf("RelocatedNativeAgentPaths(vscode) = %v, want %v", got, want)
+	}
+	for _, id := range []model.AgentID{model.AgentClaudeCode, model.AgentKiroIDE, model.AgentKimi, model.AgentCursor} {
+		other, err := agents.NewAdapter(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if paths := RelocatedNativeAgentPaths(home, other); len(paths) != 0 {
+			t.Fatalf("RelocatedNativeAgentPaths(%s) = %v, want none", id, paths)
+		}
+	}
 }

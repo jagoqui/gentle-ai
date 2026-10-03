@@ -126,6 +126,14 @@ func parseReviewProviderRoleCapture(command string, args []string, stdout io.Wri
 	if _, err := reviewCaptureRuntimeWithBoundTransport(string(binding.runtime)); err != nil {
 		return nil, reviewPreflightError(err)
 	}
+	// Printing the role prompt is what the host relays to its reviewer
+	// agent, so an explicit --materialize re-checks that agent; --input stays
+	// ungated so a bound submission is never stranded.
+	if binding.materialize {
+		if err := reviewCaptureMaterializeRuntimeGate(binding.runtime); err != nil {
+			return nil, reviewPreflightError(err)
+		}
+	}
 	if reviewProviderCaptureRuntime(binding.runtime) && binding.materialize {
 		return nil, reviewPreflightError(fmt.Errorf("review %s --materialize is unavailable for %q: its compiled Go adapter executes the provider contract directly; rerun `gentle-ai review %s` with the same binding and --execute", command, binding.runtime, command))
 	}

@@ -14,15 +14,16 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
 )
 
-// reviewVSCodeReviewerAgentHome resolves the home whose VS Code user prompts
-// folder holds the managed relay reviewer. A global `gentle-ai sync` installs
-// it there; tests replace this seam with a temporary home.
+// reviewVSCodeReviewerAgentHome resolves the home whose Copilot user agents
+// folder (`~/.copilot/agents`, the adapter's SubAgentsDir) holds the managed
+// relay reviewer. A global `gentle-ai sync` installs it there; tests replace
+// this seam with a temporary home.
 //
-// Only the user-profile location is accepted. A workspace-scoped sync passes
-// the workspace root to the same adapter resolver, which yields
-// `<workspace>/.config/Code/User/prompts` (or the per-OS equivalent): VS Code
-// Copilot Chat never discovers custom agents there, so accepting that file
-// would advertise a reviewer `runSubagent` cannot reach.
+// Only the user-home location is accepted. A workspace-scoped sync passes the
+// workspace root to the same adapter resolver, which yields
+// `<workspace>/.copilot/agents`: that is not a default VS Code Copilot Chat
+// custom agent location, so accepting that file would advertise a reviewer
+// `runSubagent` cannot reach.
 var reviewVSCodeReviewerAgentHome = os.UserHomeDir
 
 // reviewVSCodeReviewerAgentState is the observed state of the managed relay
@@ -36,7 +37,7 @@ const (
 	reviewVSCodeReviewerAgentUnverifiable reviewVSCodeReviewerAgentState = "unverifiable"
 )
 
-// reviewVSCodeReviewerAgentStatus reports whether the VS Code user prompts
+// reviewVSCodeReviewerAgentStatus reports whether the Copilot user agents
 // folder holds exactly the managed tool-less reviewer the installer writes:
 // one Lstat, one read, and one byte comparison against the installer's own
 // render (reviewassets.ManagedVSCodeReviewerAgent), so the gate and the
@@ -99,7 +100,7 @@ func reviewVSCodeReviewerAgentIsSoleMissingCondition(agent model.AgentID) bool {
 // redact anything shaped like a path.
 func reviewVSCodeReviewerAgentGuidance(agent model.AgentID, state reviewVSCodeReviewerAgentState) string {
 	prefix := "; " + string(agent) + " is eligible only while the managed `" + reviewassets.VSCodeReviewerAgentFileName +
-		"` reviewer agent in the VS Code user prompts folder is "
+		"` reviewer agent in the Copilot user agents folder is "
 	sync := "`gentle-ai sync --agent " + string(agent) + "`"
 	switch state {
 	case reviewVSCodeReviewerAgentModified:
@@ -109,4 +110,22 @@ func reviewVSCodeReviewerAgentGuidance(agent model.AgentID, state reviewVSCodeRe
 	default:
 		return prefix + "installed, and it is missing; run " + sync + " and re-run"
 	}
+}
+
+// reviewCaptureMaterializeRuntimeGate re-checks the installed-reviewer gate
+// for an explicit `--materialize=true` capture (lens, refuter, and targeted
+// validator). Capture eligibility otherwise follows
+// reviewCaptureBoundRuntimeCapability, which skips the gate so a bound
+// `--input` submission is never stranded; but the materialized prompt is
+// exactly what the host hands the `gentle-reviewer` subagent, so printing it
+// while that agent is missing or modified would relay the reviewer through an
+// agent whose tool-less isolation is unverified. It refuses with the same
+// typed refusal and sync guidance START and STATUS use. Every other runtime,
+// Pi included (#4256), is unaffected.
+func reviewCaptureMaterializeRuntimeGate(agent model.AgentID) error {
+	if agent != model.AgentVSCodeCopilot {
+		return nil
+	}
+	_, err := reviewRuntimeWithImmutableTransport(string(agent))
+	return err
 }
