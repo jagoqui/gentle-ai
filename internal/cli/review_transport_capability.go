@@ -58,7 +58,22 @@ const (
 	// the raw final bytes through the exact capture operation. Go keeps
 	// prompt materialization, admission, budgets, receipts, and gates.
 	reviewImmutableTransportPiHostRelay reviewImmutableTransport = "pi_host_relay"
+	// reviewImmutableTransportVSCodeHostRelay is the same host-relay shape
+	// owned by VS Code Copilot Chat: the parent runs the exact returned
+	// `--materialize=true` tokens, hands the Go-issued opaque prompt verbatim
+	// to one isolated tool-less `runSubagent` reviewer, and submits that
+	// reviewer's raw final message through the existing --input path. Go keeps
+	// prompt materialization, admission, budgets, receipts, and gates.
+	reviewImmutableTransportVSCodeHostRelay reviewImmutableTransport = "vscode_copilot_host_relay"
 )
+
+// reviewImmutableTransportIsHostRelay reports whether a compiled transport is
+// a host relay: the host prints the Go-materialized provider task, runs its
+// own reviewer on those bytes, and submits the raw result through --input.
+// It is the single classification every host-relay check reads.
+func reviewImmutableTransportIsHostRelay(transport reviewImmutableTransport) bool {
+	return transport == reviewImmutableTransportPiHostRelay || transport == reviewImmutableTransportVSCodeHostRelay
+}
 
 // reviewPiHostRelayContract is the exact relay contract this binary admits.
 // The Pi launcher lives in gentle-pi and is versioned independently; it
@@ -82,6 +97,12 @@ func reviewImmutableRuntimeCapability(agent model.AgentID) reviewImmutableRuntim
 	case model.AgentClaudeCode:
 		policy.Eligible = true
 	case model.AgentCodex:
+		policy.Eligible = true
+	case model.AgentVSCodeCopilot:
+		// VS Code has no launcher process that could export a relay
+		// handshake, so eligibility is the compiled manifest alone, exactly
+		// like Claude Code and Codex. The bound capture still refuses any
+		// forged or mismatched binding on its own.
 		policy.Eligible = true
 	case model.AgentOpenCode:
 		// The relay declaration and the detected runtime must agree: the V1
@@ -132,6 +153,8 @@ func reviewImmutableRuntimeCapability(agent model.AgentID) reviewImmutableRuntim
 		policy.Transport = reviewImmutableTransportCodexAdvisoryScratchProcess
 	case model.AgentPi:
 		policy.Transport = reviewImmutableTransportPiHostRelay
+	case model.AgentVSCodeCopilot:
+		policy.Transport = reviewImmutableTransportVSCodeHostRelay
 	}
 	return policy
 }
@@ -140,7 +163,7 @@ func (capability reviewImmutableRuntimePolicy) supportsImmutableReceiptReview() 
 	return capability.Transport == reviewImmutableTransportClaudePromptCarried ||
 		capability.Transport == reviewImmutableTransportOpenCodeProviderInjected ||
 		capability.Transport == reviewImmutableTransportCodexAdvisoryScratchProcess ||
-		capability.Transport == reviewImmutableTransportPiHostRelay
+		reviewImmutableTransportIsHostRelay(capability.Transport)
 }
 
 // reviewTransportSupportedRuntimeIDs derives the actionable runtime list from

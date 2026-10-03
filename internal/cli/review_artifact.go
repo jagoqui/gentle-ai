@@ -205,13 +205,13 @@ func RunReviewCaptureResult(args []string, stdout io.Writer) error {
 		// reviewer. Both state what the caller passed, what the runtime's
 		// compiled transport is, and the one form that would be accepted.
 		providerTransport := reviewCaptureBoundRuntimeCapability(providerRuntime).Transport
-		isHostRelayMaterializeTransport := providerTransport == reviewImmutableTransportPiHostRelay
+		isHostRelayMaterializeTransport := reviewImmutableTransportIsHostRelay(providerTransport)
 		if *materialize {
 			if reviewProviderCaptureRuntime(providerRuntime) {
 				return reviewPreflightError(fmt.Errorf("review capture-result --materialize is unavailable for %q: a compiled runtime materializes internally; run the capture operation without --materialize", providerRuntime)) // refusal:by-design operator-knowledge: compiled subprocess adapters already receive the Go-materialized request in-process
 			}
 			if !isHostRelayMaterializeTransport {
-				return reviewPreflightError(fmt.Errorf("review capture-result --materialize is unavailable for %q: printing the Go-materialized provider task is the host-relay form, and this runtime's compiled transport is %q; collect its reviewer result through that live host transport instead", providerRuntime, providerTransport)) // refusal:by-design world-action: only the Pi host relay collects a printed provider task
+				return reviewPreflightError(fmt.Errorf("review capture-result --materialize is unavailable for %q: printing the Go-materialized provider task is the host-relay form, and this runtime's compiled transport is %q; collect its reviewer result through that live host transport instead", providerRuntime, providerTransport)) // refusal:by-design world-action: only a host relay collects a printed provider task
 			}
 		} else if hostRelaySubmission {
 			if !isHostRelayMaterializeTransport {

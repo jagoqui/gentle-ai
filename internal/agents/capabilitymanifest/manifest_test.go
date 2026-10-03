@@ -224,7 +224,7 @@ func TestEveryManifestKeepsWorkRoutingDormantAndHashesCanonically(t *testing.T) 
 		model.AgentPi:            "sha256:cf2edc78e304c31a4fb0fe7ffb034128c008801499200eb6da97303f3a3b719d",
 		model.AgentQwenCode:      "sha256:490e77af62787bd18dd47145b673fdd222de199815ad1bed9fa33042eba80387",
 		model.AgentTrae:          "sha256:6ee937b8a1a35f51dcb8db6d90b9f05a52b651cedff9d323dede48d9c4a3fde8",
-		model.AgentVSCodeCopilot: "sha256:cc800f1eca6d5ea36ae83ae4fd43b59223093196970bdfee59096c60fe22fffe",
+		model.AgentVSCodeCopilot: "sha256:36912502645bad0505186814e3b892658dd72e1c3764ca8303b56d4f0b671436",
 		model.AgentWindsurf:      "sha256:2ccb52ebf0926b16f39f59e3df4bbf392c7bdd7fcc76dfb38ee758574be3ad00",
 	}
 
@@ -244,7 +244,8 @@ func TestEveryManifestKeepsWorkRoutingDormantAndHashesCanonically(t *testing.T) 
 			if manifest.Advertises(ContractWorkRoutingV1) {
 				t.Fatal("work-routing must remain unadvertised before final activation")
 			}
-			wantImmutableExecutor := agent == model.AgentClaudeCode || agent == model.AgentOpenCode || agent == model.AgentCodex || agent == model.AgentPi
+			wantImmutableExecutor := agent == model.AgentClaudeCode || agent == model.AgentOpenCode || agent == model.AgentCodex || agent == model.AgentPi ||
+				agent == model.AgentVSCodeCopilot
 			if got := manifest.Advertises(ContractImmutableReviewExecutorV1); got != wantImmutableExecutor {
 				t.Fatalf("immutable reviewer execution advertised = %t, want %t", got, wantImmutableExecutor)
 			}
@@ -317,7 +318,7 @@ func TestEveryManifestDigestStaysByteStable(t *testing.T) {
 		model.AgentOpenCode:      "sha256:c4889e14ddd1f82160d8d5bb49bcdf29bdac5fe367218adf6458a80bc9d5af9d",
 		model.AgentQwenCode:      "sha256:490e77af62787bd18dd47145b673fdd222de199815ad1bed9fa33042eba80387",
 		model.AgentTrae:          "sha256:6ee937b8a1a35f51dcb8db6d90b9f05a52b651cedff9d323dede48d9c4a3fde8",
-		model.AgentVSCodeCopilot: "sha256:cc800f1eca6d5ea36ae83ae4fd43b59223093196970bdfee59096c60fe22fffe",
+		model.AgentVSCodeCopilot: "sha256:36912502645bad0505186814e3b892658dd72e1c3764ca8303b56d4f0b671436",
 		model.AgentWindsurf:      "sha256:2ccb52ebf0926b16f39f59e3df4bbf392c7bdd7fcc76dfb38ee758574be3ad00",
 	}
 
@@ -349,7 +350,7 @@ func TestEveryManifestDigestStaysByteStable(t *testing.T) {
 }
 
 func TestReviewTransportAdvertisementIsClosedCatalogSet(t *testing.T) {
-	const wantExposed = 4
+	const wantExposed = 5
 
 	exposed := 0
 	for _, agent := range catalog.AllAgents() {
@@ -358,7 +359,8 @@ func TestReviewTransportAdvertisementIsClosedCatalogSet(t *testing.T) {
 			want := agent.ID == model.AgentClaudeCode ||
 				agent.ID == model.AgentOpenCode ||
 				agent.ID == model.AgentCodex ||
-				agent.ID == model.AgentPi
+				agent.ID == model.AgentPi ||
+				agent.ID == model.AgentVSCodeCopilot
 			if got := manifest.Advertises(ContractReviewTransportV1); got != want {
 				t.Fatalf("review transport advertised = %t, want %t", got, want)
 			}

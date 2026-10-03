@@ -16,7 +16,7 @@ func TestSupportsReceiptDrivenDevelopmentIsTheClosedRDDRuntimeSet(t *testing.T) 
 		{AgentKilocode, false},
 		{AgentGeminiCLI, false},
 		{AgentCursor, false},
-		{AgentVSCodeCopilot, false},
+		{AgentVSCodeCopilot, true},
 		{AgentAntigravity, false},
 		{AgentWindsurf, false},
 		{AgentKimi, false},

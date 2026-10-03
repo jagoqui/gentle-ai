@@ -135,8 +135,8 @@ func parseReviewProviderRoleCapture(command string, args []string, stdout io.Wri
 	if reviewProviderHostRelayMaterializeRuntime(binding.runtime) && binding.execute {
 		return nil, reviewPreflightError(fmt.Errorf("review %s --execute is unavailable for %q: it is host-mediated; run the STATUS-issued `--materialize` operation and submit the host result through `--input`", command, binding.runtime)) // refusal:by-design world-action: Go never spawns a process for a host-relay runtime; the host materializes, runs its own reviewer, and submits the raw result
 	}
-	if !reviewProviderCaptureRuntime(binding.runtime) && reviewCaptureBoundRuntimeCapability(binding.runtime).Transport != reviewImmutableTransportPiHostRelay {
-		return nil, reviewPreflightError(fmt.Errorf("review %s provider runtime %q has no Go-owned role capture contract", command, binding.runtime)) // refusal:by-design world-action: only compiled adapters and the Pi host relay collect non-lens provider roles
+	if !reviewProviderCaptureRuntime(binding.runtime) && !reviewImmutableTransportIsHostRelay(reviewCaptureBoundRuntimeCapability(binding.runtime).Transport) {
+		return nil, reviewPreflightError(fmt.Errorf("review %s provider runtime %q has no Go-owned role capture contract", command, binding.runtime)) // refusal:by-design world-action: only compiled adapters and host relays collect non-lens provider roles
 	}
 	ctx := context.Background()
 	var err error

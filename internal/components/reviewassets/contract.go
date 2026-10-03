@@ -33,6 +33,17 @@ const compiledCapture = "For each returned `review.capture-result` input, run it
 	"Each of those rebuilds the returned command into the relay form and moves the complete candidate evidence onto the parent for every lens, to reach a result the returned command already produces carrying nothing. " +
 	"An empty, malformed, schema-invalid, or incomplete result is handled by the recovery rule below, exactly as a relayed one is."
 
+const vscodeCapture = "For each returned `review.capture-result` input, relay one isolated reviewer through VS Code Copilot Chat. " +
+	"First run the input's exact capture operation in the terminal with its argument tokens exactly as returned; those tokens carry `--agent=vscode-copilot --materialize=true`, so the run only prints the raw Go-materialized reviewer prompt bytes and captures nothing. " +
+	"Then invoke the `#tool:runSubagent` tool once with `agentName: \"gentle-reviewer\"`, passing those printed bytes verbatim as its `prompt`. " +
+	"Write that subagent's single final message verbatim, as BOM-less UTF-8, to a scratch file outside the repository worktree, then run the input's exact `submission` operation and argument tokens with that file path substituted only into its `--input` value. " +
+	"Never edit, summarize, fence, or reconstruct the prompt or the result, and never add `--agent` or `--input` to a token list that did not return them. " +
+	"The reviewer result must remain the reviewer's raw JSON object; `inspection.status`/`inspection.reason` are the only admission-completeness signal."
+
+const vscodeGroup = "### VS Code Copilot Reviewer Sequence (MANDATORY)\n\n" +
+	"When one fresh `collect.inputs` set contains multiple distinct independent `review.capture-result` reviewer slots, relay them one at a time in provider order: materialize, run one `runSubagent` reviewer, and submit each slot before starting the next. For canonical 4R, preserve `review-risk`, `review-resilience`, `review-readability`, `review-reliability` order.\n\n" +
+	"Each relay runs only its own provider-issued `review.capture-result` argument tokens and submission tokens exactly as returned. Submission order is not authority: shared Go admission/election owns reduction and semantics. The final admitted capture owns reduction and closure. On `approved`, authority is already burned: do not FINALIZE or issue a trailing STATUS. On `correction_required`, continue only through exact bound STATUS and the provider-issued `review.capture-correction-plan` binding. After a malformed or nonterminal capture, reconcile through exact bound STATUS and retry only an identically reoffered slot."
+
 // ReviewExecutionContractFor returns the runtime-bound provider-owned contract.
 func ReviewExecutionContractFor(agent model.AgentID) (string, error) {
 	manifest, err := capabilitymanifest.ForAgent(agent)
@@ -55,6 +66,10 @@ func ContractFor(agent model.AgentID) string {
 			rendered = strings.NewReplacer("`task`", "`subagent`", "`subagent_type`", "`agent`").Replace(rendered)
 		}
 		return rendered
+	case agent == model.AgentVSCodeCopilot:
+		// The host relay is sequential: each slot materializes, runs one
+		// isolated subagent, and submits before the next one starts.
+		return contract + "\n\n" + vscodeGroup
 	case reviewerprovider.RegisteredRuntime(agent):
 		return contract + "\n\n" + concurrentGroup
 	}
@@ -68,8 +83,11 @@ func selectTransport(contract string, agent model.AgentID) string {
 		return contract
 	}
 	body := strings.TrimSpace(contract[start+len(captureStart) : end])
-	if reviewerprovider.CapturesInProcess(agent) {
+	switch {
+	case reviewerprovider.CapturesInProcess(agent):
 		body = compiledCapture
+	case agent == model.AgentVSCodeCopilot:
+		body = vscodeCapture
 	}
 	return contract[:start] + body + contract[end+len(captureEnd):]
 }

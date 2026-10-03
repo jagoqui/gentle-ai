@@ -14,6 +14,7 @@ var receiptDrivenDevelopmentAgents = []AgentID{
 	AgentCodex,
 	AgentOpenCode,
 	AgentPi,
+	AgentVSCodeCopilot,
 }
 
 // SupportsReceiptDrivenDevelopment reports whether agent receives
