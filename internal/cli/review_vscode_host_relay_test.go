@@ -19,10 +19,12 @@ import (
 // opaque reviewer prompt, the host runs one isolated `runSubagent` reviewer on
 // those bytes, and submits the raw result through --input. Unlike Pi it has
 // no launcher process that could export an env handshake, so its eligibility
-// is the compiled manifest alone (like Claude Code and Codex).
+// is the compiled manifest plus the installed managed reviewer agent
+// (review_vscode_reviewer_agent_gate_test.go covers the refused states).
 
 func TestVSCodeCopilotHostRelayIsEligibleWithoutAnyHandshake(t *testing.T) {
 	t.Setenv(reviewPiHostRelayContractEnvironment, "")
+	installVSCodeReviewerAgentForTest(t)
 	capability := reviewImmutableRuntimeCapability(model.AgentVSCodeCopilot)
 	if !capability.Eligible || capability.Transport != reviewImmutableTransportVSCodeHostRelay ||
 		!capability.supportsImmutableReceiptReview() {
@@ -55,6 +57,7 @@ func TestVSCodeCopilotHostRelayIsEligibleWithoutAnyHandshake(t *testing.T) {
 }
 
 func TestNegotiatedStatusRendersVSCodeHostRelayMaterializeCaptureInput(t *testing.T) {
+	installVSCodeReviewerAgentForTest(t)
 	reviewEnabledHome(t)
 	t.Setenv(reviewPiHostRelayContractEnvironment, "")
 	repo, _, record, _ := newCandidateInspectionReview(t, "candidate\n", true)
@@ -102,6 +105,7 @@ func TestNegotiatedStatusRendersVSCodeHostRelayMaterializeCaptureInput(t *testin
 }
 
 func TestReviewCaptureResultVSCodeMaterializesAndSubmitsThroughInput(t *testing.T) {
+	installVSCodeReviewerAgentForTest(t)
 	reviewEnabledHome(t)
 	t.Setenv(reviewPiHostRelayContractEnvironment, "")
 	repo, args, record, _ := newCandidateInspectionReview(t, "candidate\n", true)
@@ -153,6 +157,7 @@ func TestReviewCaptureResultVSCodeMaterializesAndSubmitsThroughInput(t *testing.
 }
 
 func TestReviewCaptureResultRefusesNonRelayRuntimeWhereVSCodeRelays(t *testing.T) {
+	installVSCodeReviewerAgentForTest(t)
 	reviewEnabledHome(t)
 	t.Setenv(reviewPiHostRelayContractEnvironment, "")
 	repo, args, record, _ := newCandidateInspectionReview(t, "candidate\n", true)

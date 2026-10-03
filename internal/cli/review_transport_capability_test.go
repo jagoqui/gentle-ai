@@ -18,6 +18,7 @@ import (
 // runtimes that do not own a native executor boundary.
 func TestImmutableReviewRuntimeMatrix(t *testing.T) {
 	t.Setenv(reviewPiHostRelayContractEnvironment, reviewPiHostRelayContract)
+	installVSCodeReviewerAgentForTest(t)
 	for _, test := range []struct {
 		name      string
 		runtime   string
@@ -56,6 +57,7 @@ func TestImmutableReviewRuntimeMatrix(t *testing.T) {
 
 func TestImmutableReviewRuntimeCapabilityIsClosedCatalogSet(t *testing.T) {
 	t.Setenv(reviewPiHostRelayContractEnvironment, reviewPiHostRelayContract)
+	installVSCodeReviewerAgentForTest(t)
 
 	const wantExposed = 5
 	exposed := 0
@@ -178,6 +180,7 @@ func TestUnsupportedImmutableReviewTransportStopsBeforeRepositoryOrAuthority(t *
 // OPENCODE_DISABLE_EXTERNAL_SKILLS, which this test deliberately leaves unset.
 func TestSupportedImmutableReviewTransportReachesRepositoryValidation(t *testing.T) {
 	t.Setenv(reviewPiHostRelayContractEnvironment, reviewPiHostRelayContract)
+	installVSCodeReviewerAgentForTest(t)
 	for _, test := range []struct {
 		name    string
 		runtime string
@@ -248,6 +251,7 @@ func TestV21RejectsDuplicateRuntimeAgentsBeforeRepositoryAccess(t *testing.T) {
 // the bundle may only declare what the boundary actually admits.
 func TestRegisteredRuntimeIdentitiesMatchCompiledTransportBoundary(t *testing.T) {
 	t.Setenv(reviewPiHostRelayContractEnvironment, reviewPiHostRelayContract)
+	installVSCodeReviewerAgentForTest(t)
 	registered := reviewerprovider.RegisteredRuntimeIdentities()
 	supported := reviewTransportSupportedRuntimeIDs()
 	sort.Strings(registered)

@@ -131,3 +131,134 @@ func TestInstallNativeAgentsWritesVSCodeReviewerVerbatim(t *testing.T) {
 		}
 	}
 }
+
+// TestManagedVSCodeReviewerAgentIsTheInstalledRender pins the bytes the vscode
+// relay eligibility gate compares against to the installer's own output, so
+// the gate and the installer can never drift (any InstallOptions).
+func TestManagedVSCodeReviewerAgentIsTheInstalledRender(t *testing.T) {
+	adapter, err := agents.NewAdapter(model.AgentVSCodeCopilot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	if _, err := InstallNativeAgents(home, adapter, InstallOptions{CodeGraphGuidanceMarkdown: "## CodeGraph\n\nUse codegraph_explore.\n"}); err != nil {
+		t.Fatal(err)
+	}
+	installed, err := os.ReadFile(filepath.Join(adapter.SubAgentsDir(home), VSCodeReviewerAgentFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	managed, err := ManagedVSCodeReviewerAgent(adapter)
+	if err != nil {
+		t.Fatalf("ManagedVSCodeReviewerAgent() error = %v", err)
+	}
+	if string(managed) != string(installed) {
+		t.Fatalf("managed render differs from the installed bytes:\nmanaged %q\ninstalled %q", managed, installed)
+	}
+	if VSCodeReviewerAgentFileName != VSCodeReviewerAgentName+".agent.md" {
+		t.Fatalf("VSCodeReviewerAgentFileName = %q", VSCodeReviewerAgentFileName)
+	}
+
+	claude, err := agents.NewAdapter(model.AgentClaudeCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ManagedVSCodeReviewerAgent(claude); err == nil {
+		t.Fatal("ManagedVSCodeReviewerAgent accepted a non-vscode adapter")
+	}
+}
+
+// TestInstallNativeAgentsPreservesVSCodePromptsFolderUserFiles proves the
+// native installer touches only the managed reviewer and its ownership ledger
+// in the shared VS Code user prompts folder: the gentle-ai instructions file,
+// a user's own custom agent, and a user prompt stay byte-identical across a
+// first install, a managed-file refresh, and an idempotent re-run.
+func TestInstallNativeAgentsPreservesVSCodePromptsFolderUserFiles(t *testing.T) {
+	adapter, err := agents.NewAdapter(model.AgentVSCodeCopilot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	dir := adapter.SubAgentsDir(home)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	userFiles := map[string]string{
+		"gentle-ai.instructions.md": "managed instructions owned by another component\n",
+		"my-agent.agent.md":         "---\nname: my-agent\ntools: ['codebase']\n---\nmine\n",
+		"notes.prompt.md":           "---\nmode: ask\n---\nnotes\n",
+	}
+	for name, content := range userFiles {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertUserFiles := func(stage string) {
+		t.Helper()
+		for name, want := range userFiles {
+			got, err := os.ReadFile(filepath.Join(dir, name))
+			if err != nil || string(got) != want {
+				t.Fatalf("%s: user file %s = %q, %v; want byte-identical %q", stage, name, got, err, want)
+			}
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range entries {
+			if _, user := userFiles[entry.Name()]; user {
+				continue
+			}
+			if entry.Name() != VSCodeReviewerAgentFileName && entry.Name() != OwnershipLedgerFilename {
+				t.Fatalf("%s: unexpected file %s in the prompts folder", stage, entry.Name())
+			}
+		}
+	}
+
+	if _, err := InstallNativeAgents(home, adapter, InstallOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	assertUserFiles("first install")
+
+	// A stale owned reviewer (an older managed render) is refreshed in place.
+	ledger, err := os.ReadFile(filepath.Join(dir, OwnershipLedgerFilename))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := []byte("---\nname: gentle-reviewer\ntools: []\n---\nolder managed body\n")
+	if err := os.WriteFile(filepath.Join(dir, VSCodeReviewerAgentFileName), stale, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, OwnershipLedgerFilename), []byte(strings.Replace(string(ledger), installedHash(mustManagedVSCodeReviewer(t, adapter)), installedHash(stale), 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	refresh, err := InstallNativeAgents(home, adapter, InstallOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !refresh.Changed {
+		t.Fatalf("stale owned reviewer was not refreshed: %+v", refresh)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dir, VSCodeReviewerAgentFileName)); string(got) != string(mustManagedVSCodeReviewer(t, adapter)) {
+		t.Fatalf("refreshed reviewer = %q", got)
+	}
+	assertUserFiles("managed refresh")
+
+	again, err := InstallNativeAgents(home, adapter, InstallOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Changed {
+		t.Fatalf("idempotent re-run changed files: %+v", again)
+	}
+	assertUserFiles("idempotent re-run")
+}
+
+func mustManagedVSCodeReviewer(t *testing.T, adapter agents.Adapter) []byte {
+	t.Helper()
+	managed, err := ManagedVSCodeReviewerAgent(adapter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return managed
+}

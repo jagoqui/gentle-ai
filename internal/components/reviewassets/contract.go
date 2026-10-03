@@ -38,6 +38,10 @@ const compiledCapture = "For each returned `review.capture-result` input, run it
 // same name and NativeAgentManifest installs it.
 const VSCodeReviewerAgentName = "gentle-reviewer"
 
+// VSCodeReviewerAgentFileName is the file the native installer writes into the
+// VS Code user prompts folder (agents.Adapter.SubAgentsDir) for the reviewer.
+const VSCodeReviewerAgentFileName = VSCodeReviewerAgentName + ".agent.md"
+
 const vscodeCapture = "For each returned `review.capture-result` input, relay one isolated reviewer through VS Code Copilot Chat. " +
 	"First run the input's exact capture operation in the terminal with its argument tokens exactly as returned; those tokens carry `--agent=vscode-copilot --materialize=true`, so the run only prints the raw Go-materialized reviewer prompt bytes and captures nothing. " +
 	"Then invoke the `#tool:runSubagent` tool once with `agentName: \"" + VSCodeReviewerAgentName + "\"`, passing those printed bytes verbatim as its `prompt`. " +

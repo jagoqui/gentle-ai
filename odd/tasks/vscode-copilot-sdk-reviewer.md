@@ -46,6 +46,11 @@ No Node, no CLI: everything on the gentle-ai side is Go.
   updated parity/count/digest tests, materialize→`--input` round-trip test. Route: delegated direct.
 - [x] T2 — Assets/install: `internal/assets/vscode/agents/gentle-reviewer.agent.md` (tool-less, user-invocable false,
   agents []), vscode adapter agent dir wiring + install, tests. Route: delegated direct.
+- [x] T4 — Review follow-ups (user-authorized 2026-10-03): (a) vscode relay eligibility requires the installed
+  `gentle-reviewer.agent.md` to exist and match the embedded asset bytes, else typed refusal naming
+  `gentle-ai sync --agent vscode-copilot` (covers eligibility-unconditional + tamper side of isolation-unproved;
+  runtime zero-tools proof stays T3); (b) audit every `SubAgentsDir` consumer and guarantee cleanup/uninstall/backup
+  never touch non-managed files in the shared prompts folder, with tests. Route: delegated direct.
 - [ ] T3 — Organic proof in VS Code Copilot Chat: positive capture and zero-tools confirmation. Pending: user env.
 
 ## Acceptance criteria
@@ -91,6 +96,25 @@ No Node, no CLI: everything on the gentle-ai side is Go.
     STATUS offers the relay; no test for the absent-agent case.
   - R3-vscode-subagentsdir-activation: `SubAgentsDir` now returns the shared prompts folder; prove cleanup/uninstall
     paths never touch other user files there.
+- T4 (delegated writer, uncommitted): RED observed: reviewassets compile failure (undefined
+  `VSCodeReviewerAgentFileName`/`ManagedVSCodeReviewerAgent`) and cli compile failure (undefined
+  `reviewVSCodeReviewerAgentHome` and gate symbols); after wiring the gate, 5 existing vscode tests failed until they
+  installed the agent through the new seam (proves the gate bites). GREEN after implementation.
+  (a) `review_vscode_reviewer_agent_gate.go`: vscode-copilot is eligible only when
+  `SubAgentsDir(os.UserHomeDir())/gentle-reviewer.agent.md` is a regular file byte-identical to
+  `reviewassets.ManagedVSCodeReviewerAgent` (the installer's own render); missing/modified/unverifiable refuse with
+  typed guidance naming `gentle-ai sync --agent <caller identity>` (modified: delete first, since the installer
+  preserves unowned files). Guidance survives the privacy scrubber (no path separators). Workspace scope not accepted:
+  the workspace-root render lands under `<ws>/.config/Code/User/prompts`, which VS Code never discovers. Capture-time
+  follows Pi (#4256): `reviewCaptureBoundRuntimeCapability` skips the agent gate for a bound `--input` capture; START,
+  STATUS and the `--materialize` offer still require it.
+  (b) SubAgentsDir audit: install backup (`run.go` backupTargets) and sync backup (`sync.go` syncBackupTargetsScoped)
+  are ungated but scoped to `NativeAgentFileNames` + ledger; `sddSubAgentPaths` and the upgrade executor backup are
+  gated on `SupportsSubAgents` (false for vscode); `InstallNativeAgents` is manifest/ledger scoped (no retired list for
+  vscode); uninstall never resolves SubAgentsDir. No narrowing needed; guard tests added for install/sync, backup
+  targets, gated consumers, complete/partial uninstall.
+  Checks: gofmt clean; `go vet ./internal/...` clean; `go build ./...` ok; agents/components/model/reviewerprovider
+  41 packages ok; `go test ./internal/cli/...` ok (402.9s).
 
 ## Next step
 

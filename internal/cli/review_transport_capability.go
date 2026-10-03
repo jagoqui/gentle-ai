@@ -100,9 +100,16 @@ func reviewImmutableRuntimeCapability(agent model.AgentID) reviewImmutableRuntim
 		policy.Eligible = true
 	case model.AgentVSCodeCopilot:
 		// VS Code has no launcher process that could export a relay
-		// handshake, so eligibility is the compiled manifest alone, exactly
-		// like Claude Code and Codex. The bound capture still refuses any
-		// forged or mismatched binding on its own.
+		// handshake. Its required conjunct is the relay's own executor: the
+		// managed tool-less `gentle-reviewer` agent must be installed
+		// byte-identical in the VS Code user prompts folder, or STATUS would
+		// offer a materialize/--input relay no installed reviewer can run
+		// (and a tampered agent could carry tools). It can only narrow the
+		// compiled boundary, never expand it. The bound capture still refuses
+		// any forged or mismatched binding on its own.
+		if reviewVSCodeReviewerAgentStatus() != reviewVSCodeReviewerAgentInstalled {
+			return policy
+		}
 		policy.Eligible = true
 	case model.AgentOpenCode:
 		// The relay declaration and the detected runtime must agree: the V1
@@ -229,6 +236,9 @@ func reviewTransportRefusalGuidanceFor(agent model.AgentID) string {
 	if reviewPiRelayHandshakeIsSoleMissingCondition(agent) {
 		return reviewPiRelayHandshakeGuidance()
 	}
+	if reviewVSCodeReviewerAgentIsSoleMissingCondition(agent) {
+		return reviewVSCodeReviewerAgentGuidance(agent, reviewVSCodeReviewerAgentStatus())
+	}
 	return reviewTransportRefusalExitGuidance()
 }
 
@@ -269,8 +279,21 @@ func reviewRuntimeWithImmutableTransport(agent string) (model.AgentID, error) {
 // that holds a genuine binding is eligible, and the relay handshake env var
 // becomes, at most, an optional extra witness some hosts still export --
 // never the gate.
+//
+// vscode-copilot follows the same precedent for its installed-reviewer-agent
+// gate: START and STATUS (including the --materialize offer) still require the
+// managed `gentle-reviewer` agent, but a --input capture carrying a genuine
+// bound transaction does not, so deleting or editing that agent mid-lineage
+// never strands an already-frozen lineage (a transport failure must not), and
+// Go admission alone still decides what the submitted bytes are worth.
 func reviewCaptureBoundRuntimeCapability(agent model.AgentID) reviewImmutableRuntimePolicy {
-	if agent != model.AgentPi {
+	var transport reviewImmutableTransport
+	switch agent {
+	case model.AgentPi:
+		transport = reviewImmutableTransportPiHostRelay
+	case model.AgentVSCodeCopilot:
+		transport = reviewImmutableTransportVSCodeHostRelay
+	default:
 		return reviewImmutableRuntimeCapability(agent)
 	}
 	policy := reviewImmutableRuntimePolicy{Eligible: true, Transport: reviewImmutableTransportUnsupported}
@@ -278,7 +301,7 @@ func reviewCaptureBoundRuntimeCapability(agent model.AgentID) reviewImmutableRun
 	if err != nil || !manifest.Advertises(capabilitymanifest.ContractImmutableReviewExecutorV1) {
 		return policy
 	}
-	policy.Transport = reviewImmutableTransportPiHostRelay
+	policy.Transport = transport
 	return policy
 }
 

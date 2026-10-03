@@ -28,7 +28,7 @@ var NativeAgentManifest = map[model.AgentID][]string{
 	model.AgentKimi:       {"gentleman.yaml"},
 	// The VS Code relay reviewer is tool-less and installs verbatim (see
 	// renderNativeAgent); it is the only agent written to the VS Code folder.
-	model.AgentVSCodeCopilot: {VSCodeReviewerAgentName + ".agent.md"},
+	model.AgentVSCodeCopilot: {VSCodeReviewerAgentFileName},
 }
 
 // RetiredNativeAgentManifest lists the review agents earlier releases installed
@@ -218,6 +218,21 @@ func InstallNativeAgents(home string, adapter agents.Adapter, opts InstallOption
 	return result, nil
 }
 
+// ManagedVSCodeReviewerAgent returns the exact bytes InstallNativeAgents writes
+// for the VS Code relay reviewer. The reviewer installs verbatim, so its render
+// is independent of InstallOptions; the vscode relay eligibility gate compares
+// the installed file against these bytes through the installer's own render.
+func ManagedVSCodeReviewerAgent(adapter agents.Adapter) ([]byte, error) {
+	if adapter == nil || adapter.Agent() != model.AgentVSCodeCopilot {
+		return nil, fmt.Errorf("the VS Code reviewer agent renders only for %s", model.AgentVSCodeCopilot)
+	}
+	content, err := renderNativeAgent(adapter, VSCodeReviewerAgentFileName, InstallOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return []byte(content), nil
+}
+
 // renderNativeAgent renders one embedded native agent for adapter exactly as
 // the installer writes it.
 func renderNativeAgent(adapter agents.Adapter, name string, opts InstallOptions) (string, error) {
@@ -226,7 +241,7 @@ func renderNativeAgent(adapter agents.Adapter, name string, opts InstallOptions)
 	if err != nil {
 		return "", fmt.Errorf("read native agent %s: %w", path, err)
 	}
-	if adapter.Agent() == model.AgentVSCodeCopilot && name == VSCodeReviewerAgentName+".agent.md" {
+	if adapter.Agent() == model.AgentVSCodeCopilot && name == VSCodeReviewerAgentFileName {
 		// The relayed prompt is the reviewer's complete evidence: injecting a
 		// tool grant, guidance, or contract section would contradict its
 		// tool-less isolation, so the asset installs byte-identical.
