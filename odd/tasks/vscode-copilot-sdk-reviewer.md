@@ -120,3 +120,10 @@ No Node, no CLI: everything on the gentle-ai side is Go.
 
 T3: user builds the branch on Windows, runs `gentle-ai sync --agent vscode-copilot`, triggers a review in Copilot Chat
 Agent mode, and confirms in Chat Debug View that the `gentle-reviewer` subagent ran with zero tools.
+
+## T4 review (lineage `review-022f1c728effad50`, range main..cd1cd326)
+
+Consent granted; review-reliability approved; acknowledged, authority burned. New non-blocking follow-ups:
+- R3-vscode-subagentsdir-ignores-xdg: on Linux VS Code honors `XDG_CONFIG_HOME`; installer/gate pin `~/.config`.
+- R3-vscode-isolation-advertised-unproved: still requires T3 runtime zero-tools proof.
+- R3-vscode-materialize-ungated-at-capture: explicit `--materialize=true` capture bypasses the agent gate (STATUS offer is gated).
