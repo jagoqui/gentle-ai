@@ -82,3 +82,17 @@ No Node, no CLI: everything on the gentle-ai side is Go.
   `--materialize=true` tokens. Checks: gofmt/vet/build clean; agents/components/assets/model ok; internal/cli 3138
   passed; update/recoverytrace 579 passed. Per-OS path test follows the existing runtime.GOOS pattern (linux branch
   observed locally; darwin/windows run in CI).
+- Commits on fork `jagoqui/gentle-ai`: T1 `9b779cbf`, T2 `47ff4f88`. Parent spot check T2: vscode + reviewassets → 54 passed.
+- RDD review (range main..47ff4f88): assessed medium (slice_budget_reached, 692 lines); consent granted; one lens
+  (review-reliability) approved; acknowledged, lineage `review-4e880287a4e41236`, authority burned.
+- Non-blocking follow-ups from review (separate later work):
+  - R3-vscode-isolation-unproved: immutable-executor advertisement rests on `tools: []` + prose until T3 proves zero tools.
+  - R3-vscode-eligibility-unconditional: no check that `gentle-reviewer` is installed / `runSubagent` available before
+    STATUS offers the relay; no test for the absent-agent case.
+  - R3-vscode-subagentsdir-activation: `SubAgentsDir` now returns the shared prompts folder; prove cleanup/uninstall
+    paths never touch other user files there.
+
+## Next step
+
+T3: user builds the branch on Windows, runs `gentle-ai sync --agent vscode-copilot`, triggers a review in Copilot Chat
+Agent mode, and confirms in Chat Debug View that the `gentle-reviewer` subagent ran with zero tools.
