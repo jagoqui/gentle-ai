@@ -33,9 +33,14 @@ const compiledCapture = "For each returned `review.capture-result` input, run it
 	"Each of those rebuilds the returned command into the relay form and moves the complete candidate evidence onto the parent for every lens, to reach a result the returned command already produces carrying nothing. " +
 	"An empty, malformed, schema-invalid, or incomplete result is handled by the recovery rule below, exactly as a relayed one is."
 
+// VSCodeReviewerAgentName is the VS Code Copilot custom agent the vscode
+// capture transport relays to; the embedded vscode/agents asset declares the
+// same name and NativeAgentManifest installs it.
+const VSCodeReviewerAgentName = "gentle-reviewer"
+
 const vscodeCapture = "For each returned `review.capture-result` input, relay one isolated reviewer through VS Code Copilot Chat. " +
 	"First run the input's exact capture operation in the terminal with its argument tokens exactly as returned; those tokens carry `--agent=vscode-copilot --materialize=true`, so the run only prints the raw Go-materialized reviewer prompt bytes and captures nothing. " +
-	"Then invoke the `#tool:runSubagent` tool once with `agentName: \"gentle-reviewer\"`, passing those printed bytes verbatim as its `prompt`. " +
+	"Then invoke the `#tool:runSubagent` tool once with `agentName: \"" + VSCodeReviewerAgentName + "\"`, passing those printed bytes verbatim as its `prompt`. " +
 	"Write that subagent's single final message verbatim, as BOM-less UTF-8, to a scratch file outside the repository worktree, then run the input's exact `submission` operation and argument tokens with that file path substituted only into its `--input` value. " +
 	"Never edit, summarize, fence, or reconstruct the prompt or the result, and never add `--agent` or `--input` to a token list that did not return them. " +
 	"The reviewer result must remain the reviewer's raw JSON object; `inspection.status`/`inspection.reason` are the only admission-completeness signal."

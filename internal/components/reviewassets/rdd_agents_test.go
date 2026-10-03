@@ -13,7 +13,7 @@ import (
 )
 
 // rddAgentNames are the native agents receipt-driven development owns.
-var rddAgentNames = []string{"review-risk", "review-readability", "review-reliability", "review-resilience", "review-refuter", "review-validator"}
+var rddAgentNames = []string{"review-risk", "review-readability", "review-reliability", "review-resilience", "review-refuter", "review-validator", "gentle-reviewer.agent"}
 
 func isRDDAgentFile(name string) bool {
 	base := strings.TrimSuffix(strings.TrimSuffix(name, ".md"), ".yaml")

@@ -44,7 +44,7 @@ No Node, no CLI: everything on the gentle-ai side is Go.
   review_provider_runtime, review_artifact, review_provider_role_capture), registered runtime, manifest exposure maps,
   RDD agent list, vscode capture-transport contract body (reviewassets/contract.go + review-ledger-contract.md),
   updated parity/count/digest tests, materialize→`--input` round-trip test. Route: delegated direct.
-- [ ] T2 — Assets/install: `internal/assets/vscode/agents/gentle-reviewer.agent.md` (tool-less, user-invocable false,
+- [x] T2 — Assets/install: `internal/assets/vscode/agents/gentle-reviewer.agent.md` (tool-less, user-invocable false,
   agents []), vscode adapter agent dir wiring + install, tests. Route: delegated direct.
 - [ ] T3 — Organic proof in VS Code Copilot Chat: positive capture and zero-tools confirmation. Pending: user env.
 
@@ -70,3 +70,15 @@ No Node, no CLI: everything on the gentle-ai side is Go.
   `go test ./internal/cli/ -run 'VSCode|HostRelay' -count=1` → 10 passed; reviewassets/capabilitymanifest/model → 277 passed.
   Open: shared ledger sentence "Tokens carrying `--agent` capture in process with no `--input`" is inaccurate for
   vscode materialize tokens (reword in T2).
+- T2 (delegated writer, uncommitted): RED observed: compile failure of reviewassets/cli tests (undefined
+  `VSCodeReviewerAgentName`) and `TestSubAgentsDirIsVSCodeUserPromptsFolder` failing (`EmbeddedSubAgentsDir() = ""`).
+  GREEN after implementation. Asset `internal/assets/vscode/agents/gentle-reviewer.agent.md` (embedded via `all:vscode`)
+  installs through the existing native-agent path: `NativeAgentManifest[vscode-copilot] = {gentle-reviewer.agent.md}`,
+  adapter `SubAgentsDir` = VS Code user `prompts` folder, `EmbeddedSubAgentsDir` = `vscode/agents`,
+  `Features.FileSubAgents` left false (no SDD sub-agents, manifest digest unchanged). `renderNativeAgent` returns the
+  vscode reviewer verbatim (no CodeGraph/language/remote-auth injection). Ownership ledger, backup snapshots, user-file
+  preservation, and idempotency come from the shared installer. `VSCodeReviewerAgentName` constant feeds both the
+  contract `agentName` and the manifest; a cross-check test pins the asset name. Ledger sentence reworded for
+  `--materialize=true` tokens. Checks: gofmt/vet/build clean; agents/components/assets/model ok; internal/cli 3138
+  passed; update/recoverytrace 579 passed. Per-OS path test follows the existing runtime.GOOS pattern (linux branch
+  observed locally; darwin/windows run in CI).

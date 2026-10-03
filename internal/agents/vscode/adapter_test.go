@@ -157,3 +157,37 @@ func TestMCPConfigPathUsesVSCodeUserProfile(t *testing.T) {
 		}
 	}
 }
+
+// TestSubAgentsDirIsVSCodeUserPromptsFolder pins where the RDD relay reviewer
+// custom agent lands: the VS Code user prompts folder that also holds the
+// instructions file, resolved per OS. SDD file sub-agents stay unsupported.
+func TestSubAgentsDirIsVSCodeUserPromptsFolder(t *testing.T) {
+	a := NewAdapter()
+	home := "/tmp/home"
+
+	if a.SupportsSubAgents() {
+		t.Fatal("SupportsSubAgents() = true; only the native RDD reviewer installs here")
+	}
+	if got, want := a.EmbeddedSubAgentsDir(), "vscode/agents"; got != want {
+		t.Fatalf("EmbeddedSubAgentsDir() = %q, want %q", got, want)
+	}
+
+	var want string
+	switch runtime.GOOS {
+	case "darwin":
+		want = filepath.Join(home, "Library", "Application Support", "Code", "User", "prompts")
+	case "windows":
+		appData := filepath.Join(home, "AppData", "Roaming")
+		t.Setenv("APPDATA", appData)
+		want = filepath.Join(appData, "Code", "User", "prompts")
+	default:
+		t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
+		want = filepath.Join(home, ".config", "Code", "User", "prompts")
+	}
+	if got := a.SubAgentsDir(home); got != want {
+		t.Fatalf("SubAgentsDir() = %q, want %q", got, want)
+	}
+	if got := a.SubAgentsDir(home); got != filepath.Dir(a.SystemPromptFile(home)) {
+		t.Fatalf("SubAgentsDir() = %q, want the instructions folder", got)
+	}
+}

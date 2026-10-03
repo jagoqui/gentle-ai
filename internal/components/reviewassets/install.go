@@ -26,6 +26,9 @@ var NativeAgentManifest = map[model.AgentID][]string{
 	model.AgentClaudeCode: {"jd-fix-agent.md", "jd-judge-a.md", "jd-judge-b.md", "review-readability.md", "review-refuter.md", "review-reliability.md", "review-resilience.md", "review-risk.md"},
 	model.AgentKiroIDE:    {"jd-fix-agent.md", "jd-judge-a.md", "jd-judge-b.md"},
 	model.AgentKimi:       {"gentleman.yaml"},
+	// The VS Code relay reviewer is tool-less and installs verbatim (see
+	// renderNativeAgent); it is the only agent written to the VS Code folder.
+	model.AgentVSCodeCopilot: {VSCodeReviewerAgentName + ".agent.md"},
 }
 
 // RetiredNativeAgentManifest lists the review agents earlier releases installed
@@ -222,6 +225,12 @@ func renderNativeAgent(adapter agents.Adapter, name string, opts InstallOptions)
 	source, err := assets.Read(path)
 	if err != nil {
 		return "", fmt.Errorf("read native agent %s: %w", path, err)
+	}
+	if adapter.Agent() == model.AgentVSCodeCopilot && name == VSCodeReviewerAgentName+".agent.md" {
+		// The relayed prompt is the reviewer's complete evidence: injecting a
+		// tool grant, guidance, or contract section would contradict its
+		// tool-less isolation, so the asset installs byte-identical.
+		return source, nil
 	}
 	content := source
 	if prompt, reviewer := RenderReviewerAsset(path, content); reviewer {

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gentleman-programming/gentle-ai/v4/internal/assets"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/reviewassets"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
@@ -67,6 +68,40 @@ func TestFreshInstallShipsReviewAgentsOnlyToRDDRuntimes(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestFreshInstallShipsVSCodeReviewerAgent installs VS Code Copilot and checks
+// that its single tool-less relay reviewer lands, byte-identical to the
+// embedded asset, beside the instructions file in the VS Code user prompts
+// folder, without any Claude review or Judgment Day agent, and that a second
+// install leaves it unchanged.
+func TestFreshInstallShipsVSCodeReviewerAgent(t *testing.T) {
+	home := t.TempDir()
+	selection := model.Selection{Agents: []model.AgentID{model.AgentVSCodeCopilot}}
+	adapter := resolveAdapters(selection.Agents)[0]
+	dir := adapter.SubAgentsDir(home)
+	if dir != filepath.Dir(adapter.SystemPromptFile(home)) {
+		t.Fatalf("vscode SubAgentsDir = %q, want the prompts folder %q", dir, filepath.Dir(adapter.SystemPromptFile(home)))
+	}
+	path := filepath.Join(dir, reviewassets.VSCodeReviewerAgentName+".agent.md")
+	want := assets.MustRead("vscode/agents/gentle-reviewer.agent.md")
+
+	for run := 0; run < 2; run++ {
+		runInstallInjectionSteps(t, newTestInstallRuntime(t, home, selection))
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("run %d: VS Code reviewer agent not installed: %v", run, err)
+		}
+		if string(got) != want {
+			t.Fatalf("run %d: installed VS Code reviewer differs from the embedded asset", run)
+		}
+	}
+	if review := rddAgentFileNames(t, dir); len(review) != 0 {
+		t.Fatalf("vscode install wrote Claude review agents %v", review)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "jd-judge-a.md")); err == nil {
+		t.Fatal("vscode install wrote a Judgment Day agent")
 	}
 }
 
