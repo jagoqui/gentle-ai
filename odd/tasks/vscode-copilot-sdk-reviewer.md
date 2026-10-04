@@ -192,6 +192,15 @@ No Node, no CLI: everything on the gentle-ai side is Go.
   `go vet ./internal/cli/... ./internal/agents/...` clean; `go test ./internal/agents/vscode/...` ok;
   `go test ./internal/cli/...` 3167 passed; `go test ./internal/cli/ -run 'Capability|Runtime|Transport'` 366 passed
   with HOME = a temp home synced with the managed reviewer and 366 passed with an empty temp home.
+- T9 (delegated writer, uncommitted): fix T8 review WARNING (lineage `review-4e14ec40dc4bd091`). RED observed: after
+  moving `.claude/<x>`, `.claude/<x>/`, `./.claude/<x>` and `.claude\<x>` into
+  `TestClaudeConfigMixingRejectsNonEquivalentLocationKeys` and flipping the `TestClaudeConfigMixing` table case
+  (plus a new skills case) to expect the finding, 3 tests failed (relative key returned no finding). GREEN:
+  `locationDisabled` now accepts only `~/.claude/<x>` and the absolute `<home>/.claude/<x>` (either separator,
+  trailing separator allowed); workspace-relative keys resolve against the open workspace in VS Code and no longer
+  silence the advisory. Comments updated. CLI test used only `~/` keys (unchanged). Checks: `gofmt -l internal/`
+  empty; `go vet ./internal/agents/vscode/... ./internal/cli/...` clean; `go test ./internal/agents/vscode/...` ok;
+  `go test ./internal/cli/ -run 'ClaudeMixing|ClaudeConfig' -count=1` ok (4 top-level tests passed).
 
 ## Next step
 
@@ -217,3 +226,7 @@ Consent granted; review-reliability approved; acknowledged, authority burned. No
 Consent granted; review-reliability approved; acknowledged, authority burned. Non-blocking follow-ups:
 - R3-gate-reads-real-home-in-tests: gate defaults to os.UserHomeDir; capability-enumerating tests outside the seam may depend on the dev machine having synced the reviewer.
 - R3-claude-mixing-location-keys: skills accepts only `~/.claude/skills`; agents accepts `~/.claude/agents` and `.claude/agents`; absolute-path keys not matched (false-positive advisory only).
+
+- [x] T9 — Fix T8 review WARNING (user-authorized 2026-10-04): stop treating workspace-relative `.claude/agents` /
+  `.claude/skills` keys as disabling the home folder in the Claude mixing advisory; only `~/.claude/<x>` and the
+  absolute home path count. Route: delegated direct.
