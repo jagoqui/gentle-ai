@@ -69,3 +69,23 @@ defaults. SDD is retired: only ODD and RDD apply.
 - Checks: `gofmt -l internal/` empty; `go vet ./internal/...` ok; `go build ./...` ok;
   `go test ./internal/agents/... ./internal/components/... ./internal/assets/... ./internal/model/...` ok;
   `go test ./internal/cli/...` ok (405s).
+- U4 implemented (delegated writer, uncommitted, route: delegated direct): `renderNativeAgent` skips CodeGraph guidance
+  for the VS Code verifier only (`withoutCodeGraphGuidance`, vscode-copilot scoped allowlist; language contract and
+  remote authorization still injected; other runtimes unchanged); edit/execute grant checks now parse each embedded
+  asset's `tools:` list; explorer body uses CodeGraph first only for structural questions, reads parent-named files and
+  literal lookups directly, and proceeds with read/search without retry when CodeGraph is unavailable (worker body had
+  no strict ordering, unchanged). RED: `TestInstallNativeAgentsWritesVSCodeODDAgents` (verifier carried the
+  codegraph-guidance block), `TestVSCodeODDExplorerAllowsDirectReads` (failure-gated fallback wording), and a temporary
+  `edit` grant on the verifier asset failed `TestVSCodeODDAgentAssetsFrontmatter` (asset restored); GREEN after.
+  Checks: `gofmt -l internal/` empty; `go vet ./internal/components/... ./internal/cli/...` ok;
+  `go test ./internal/components/...` ok; `go test ./internal/cli/ -run 'VSCode' -count=1` ok.
+
+## U1+U2 review (lineage `review-e0293c1ee075e72e`, range 4647eb27..c94a39cf)
+
+First attempt stopped with `lens_context_budget_exceeded` (untracked `.codegraph/` forced the intended-untracked collect,
+which dropped `--base-ref` and widened the candidate to main..HEAD); fixed locally via `.git/info/exclude`. Scoped
+candidate: consent granted; review-reliability approved; acknowledged, burned. Follow-ups fixed in U4.
+
+- [x] U4 — Fix review findings: verifier gets no CodeGraph guidance (no codegraph tool); vacuous edit-grant test reads
+  the asset frontmatter; explorer may read/search parent-named files directly and uses CodeGraph first only for
+  structural questions. Route: delegated direct.

@@ -37,6 +37,35 @@ func frontmatterLines(t *testing.T, path, content string) []string {
 	return strings.Split(content[4:4+end], "\n")
 }
 
+// frontmatterTools parses the `tools:` list from frontmatter lines, so grant
+// checks read the asset itself rather than this file's expectation table.
+func frontmatterTools(t *testing.T, path string, lines []string) []string {
+	t.Helper()
+	for _, line := range lines {
+		value, ok := strings.CutPrefix(line, "tools:")
+		if !ok {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		if !strings.HasPrefix(value, "[") || !strings.HasSuffix(value, "]") {
+			t.Fatalf("%s tools is not an inline list: %q", path, value)
+		}
+		var tools []string
+		for _, item := range strings.Split(strings.Trim(value, "[]"), ",") {
+			if item = strings.Trim(strings.TrimSpace(item), `'"`); item != "" {
+				tools = append(tools, item)
+			}
+		}
+		return tools
+	}
+	t.Fatalf("%s frontmatter has no tools line", path)
+	return nil
+}
+
+// vscodeAgentsWithoutCodeGraph lists the ODD agents that carry no CodeGraph
+// tool set and therefore must not receive CodeGraph guidance.
+var vscodeAgentsWithoutCodeGraph = []string{"gentle-ai-verify"}
+
 // TestVSCodeODDAgentAssetsFrontmatter pins each embedded ODD agent's identity
 // and tool-set grant: none may delegate, none is user-invocable, and only the
 // worker may edit.
@@ -63,8 +92,12 @@ func TestVSCodeODDAgentAssetsFrontmatter(t *testing.T) {
 			if !slices.ContainsFunc(lines, func(line string) bool { return strings.HasPrefix(line, "description: ") }) {
 				t.Errorf("%s frontmatter lacks a description", path)
 			}
-			if agent.name != "gentle-ai-worker" && strings.Contains(agent.tools, "'edit'") {
-				t.Errorf("%s grants edit", path)
+			tools := frontmatterTools(t, path, lines)
+			if got, want := slices.Contains(tools, "edit"), agent.name == "gentle-ai-worker"; got != want {
+				t.Errorf("%s edit grant = %v, want %v (tools %v)", path, got, want, tools)
+			}
+			if agent.name == "gentle-ai-explore" && slices.Contains(tools, "execute") {
+				t.Errorf("%s grants execute (tools %v)", path, tools)
 			}
 			for _, excluded := range []string{"SDD", "sdd-", "opencode", "OpenCode", "`task`", "gentle_review"} {
 				if strings.Contains(content, excluded) {
@@ -153,9 +186,16 @@ func TestInstallNativeAgentsWritesVSCodeODDAgents(t *testing.T) {
 				t.Errorf("installed %s frontmatter lacks %q", agent.name, want)
 			}
 		}
-		for _, want := range []string{"<!-- gentle-ai:codegraph-guidance -->", "<!-- gentle-ai:agent-language-contract -->", "Use codegraph_explore."} {
-			if !strings.Contains(content, want) {
-				t.Errorf("installed %s lacks injected %q", agent.name, want)
+		if !strings.Contains(content, "<!-- gentle-ai:agent-language-contract -->") {
+			t.Errorf("installed %s lacks the injected language contract", agent.name)
+		}
+		withoutCodeGraph := slices.Contains(vscodeAgentsWithoutCodeGraph, agent.name)
+		if withoutCodeGraph && slices.Contains(frontmatterTools(t, path, lines), "codegraph/*") {
+			t.Fatalf("%s is exempt from CodeGraph guidance but grants codegraph/*", agent.name)
+		}
+		for _, marker := range []string{"<!-- gentle-ai:codegraph-guidance -->", "Use codegraph_explore."} {
+			if got := strings.Contains(content, marker); got == withoutCodeGraph {
+				t.Errorf("installed %s contains %q = %v, want %v", agent.name, marker, got, !withoutCodeGraph)
 			}
 		}
 	}
@@ -182,5 +222,34 @@ func TestInstallNativeAgentsWritesVSCodeODDAgents(t *testing.T) {
 	}
 	if second.Changed || len(second.Files) != 0 {
 		t.Fatalf("second install = %+v, want no change", second)
+	}
+}
+
+// TestVSCodeODDExplorerAllowsDirectReads pins that the explorer uses CodeGraph
+// first only for structural questions and never needs a CodeGraph failure
+// before reading parent-named files or doing literal lookups.
+func TestVSCodeODDExplorerAllowsDirectReads(t *testing.T) {
+	for _, name := range []string{"gentle-ai-explore", "gentle-ai-worker"} {
+		path := "vscode/agents/" + name + ".agent.md"
+		content := assets.MustRead(path)
+		for _, forbidden := range []string{
+			"Do not use that fallback before CodeGraph is unavailable or fails",
+			"If CodeGraph reports that it is unavailable or fails, then use",
+		} {
+			if strings.Contains(content, forbidden) {
+				t.Errorf("%s gates direct reads behind a CodeGraph failure: %q", path, forbidden)
+			}
+		}
+	}
+	path := "vscode/agents/gentle-ai-explore.agent.md"
+	content := assets.MustRead(path)
+	for _, want := range []string{
+		"For structural questions (architecture, call flow, dependencies, impact), use CodeGraph first when it is available",
+		"Read and search parent-named files or literal lookups directly",
+		"If CodeGraph tools are unavailable, proceed with `read` and `search` without retrying CodeGraph.",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("%s lacks %q", path, want)
+		}
 	}
 }

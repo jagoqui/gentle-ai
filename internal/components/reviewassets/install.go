@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents"
@@ -30,7 +31,9 @@ var NativeAgentManifest = map[model.AgentID][]string{
 	// renderNativeAgent). The ODD worker trio (explorer, verifier, bounded
 	// writer) mirrors OpenCode's gentle-ai-* agents and, like them, ships
 	// unconditionally because ODD is every runtime's default workflow; it
-	// renders with the usual guidance and language-contract injection.
+	// renders with the usual guidance and language-contract injection, except
+	// that the verifier, which has no CodeGraph tools, gets no CodeGraph
+	// guidance (see withoutCodeGraphGuidance).
 	model.AgentVSCodeCopilot: {VSCodeReviewerAgentFileName, "gentle-ai-explore.agent.md", "gentle-ai-verify.agent.md", "gentle-ai-worker.agent.md"},
 }
 
@@ -365,6 +368,17 @@ func ManagedVSCodeReviewerAgent(adapter agents.Adapter) ([]byte, error) {
 	return []byte(content), nil
 }
 
+// vscodeAgentsWithoutCodeGraphGuidance lists VS Code native agents whose tool
+// sets carry no CodeGraph tools: guidance telling them to call
+// codegraph_explore would name a tool they cannot reach.
+var vscodeAgentsWithoutCodeGraphGuidance = []string{"gentle-ai-verify.agent.md"}
+
+// withoutCodeGraphGuidance reports whether the named native agent must not
+// receive the injected CodeGraph guidance section.
+func withoutCodeGraphGuidance(agent model.AgentID, name string) bool {
+	return agent == model.AgentVSCodeCopilot && slices.Contains(vscodeAgentsWithoutCodeGraphGuidance, name)
+}
+
 // renderNativeAgent renders one embedded native agent for adapter exactly as
 // the installer writes it.
 func renderNativeAgent(adapter agents.Adapter, name string, opts InstallOptions) (string, error) {
@@ -418,7 +432,7 @@ func renderNativeAgent(adapter agents.Adapter, name string, opts InstallOptions)
 	content = engramToolPlaceholder.ReplaceAllString(content, "mcp__engram__$1, mcp__plugin_engram_engram__$1")
 	if filepath.Ext(name) == ".md" {
 		content = InjectCodeGraphToolGrant(content, adapter.Agent(), opts.CodeGraphGuidanceMarkdown)
-		if strings.TrimSpace(opts.CodeGraphGuidanceMarkdown) != "" {
+		if strings.TrimSpace(opts.CodeGraphGuidanceMarkdown) != "" && !withoutCodeGraphGuidance(adapter.Agent(), name) {
 			content = filemerge.InjectMarkdownSection(content, "codegraph-guidance", opts.CodeGraphGuidanceMarkdown)
 		}
 		content = filemerge.InjectMarkdownSection(content, "agent-language-contract", strings.TrimSpace(assets.MustRead("generic/agent-language-contract.md")))
