@@ -217,3 +217,10 @@ Consent granted; review-reliability approved; acknowledged, authority burned. No
 Consent granted; review-reliability approved; acknowledged, authority burned. Non-blocking follow-ups:
 - R3-gate-reads-real-home-in-tests: gate defaults to os.UserHomeDir; capability-enumerating tests outside the seam may depend on the dev machine having synced the reviewer.
 - R3-claude-mixing-location-keys: skills accepts only `~/.claude/skills`; agents accepts `~/.claude/agents` and `.claude/agents`; absolute-path keys not matched (false-positive advisory only).
+
+## T8 review (lineage `review-4e14ec40dc4bd091`, range fe94d709..4647eb27)
+
+Consent granted; approved; acknowledged, burned. Non-blocking follow-up:
+- R3-skills-workspace-relative-key-suppresses-home-advisory (WARNING): `.claude/skills` / `.claude/agents` are
+  workspace-relative in VS Code, so treating them as equivalent to `~/.claude/...` can silence the advisory while the
+  home folder is still loaded (false negative).

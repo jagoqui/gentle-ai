@@ -89,3 +89,10 @@ candidate: consent granted; review-reliability approved; acknowledged, burned. F
 - [x] U4 — Fix review findings: verifier gets no CodeGraph guidance (no codegraph tool); vacuous edit-grant test reads
   the asset frontmatter; explorer may read/search parent-named files directly and uses CodeGraph first only for
   structural questions. Route: delegated direct.
+
+## U4 review (lineage `review-d72f23f8a639b6ba`, range c94a39cf..7c01cd82)
+
+Consent granted; approved; acknowledged, burned. Whole-branch selectorless candidate (main..HEAD, 3420 lines) stopped
+with `lens_context_budget_exceeded` (no authority created); reviewed as scoped slices instead. Non-blocking:
+- R3-exact-toolset-match: edit/execute grant checks only catch whole tool sets, not `edit/<tool>` style grants.
+- R3-dual-exemption-lists: CodeGraph-guidance exemption list duplicated between production and test.
