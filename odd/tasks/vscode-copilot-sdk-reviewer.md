@@ -192,3 +192,9 @@ Consent granted; review-reliability approved; acknowledged, authority burned. No
 - R3-001: immutable-executor advertisement still awaits T3 runtime zero-tools proof.
 - R3-002: no positive test for vscode refuter/validator `--materialize=true` with the agent installed.
 - R3-003: refusal guidance should say the sync must be global (workspace-scoped installs are ignored by the gate).
+
+## T6+T7 review (lineage `review-15338c30646fea5e`, range main..fe94d709)
+
+Consent granted; review-reliability approved; acknowledged, authority burned. Non-blocking follow-ups:
+- R3-gate-reads-real-home-in-tests: gate defaults to os.UserHomeDir; capability-enumerating tests outside the seam may depend on the dev machine having synced the reviewer.
+- R3-claude-mixing-location-keys: skills accepts only `~/.claude/skills`; agents accepts `~/.claude/agents` and `.claude/agents`; absolute-path keys not matched (false-positive advisory only).
