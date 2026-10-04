@@ -121,6 +121,32 @@ func TestVSCodeHostRelayEligibleWithTheInstalledManagedReviewerAgent(t *testing.
 	}
 }
 
+// TestVSCodeReviewerAgentGateIgnoresTheAmbientHomeInTests proves the package
+// TestMain pins the gate's home seam: a HOME/USERPROFILE that holds a valid
+// managed reviewer agent must not make vscode-copilot eligible, so no test
+// result depends on whether the developer machine synced the reviewer. Tests
+// that need an installed agent opt in through installVSCodeReviewerAgentForTest.
+func TestVSCodeReviewerAgentGateIgnoresTheAmbientHomeInTests(t *testing.T) {
+	t.Setenv(reviewPiHostRelayContractEnvironment, "")
+	ambientHome := t.TempDir()
+	if _, err := reviewassets.InstallNativeAgents(ambientHome, vscode.NewAdapter(), reviewassets.InstallOptions{}); err != nil {
+		t.Fatalf("install the vscode reviewer agent into the ambient home: %v", err)
+	}
+	ambientAgent := filepath.Join(vscode.NewAdapter().SubAgentsDir(ambientHome), reviewassets.VSCodeReviewerAgentFileName)
+	if _, err := os.Stat(ambientAgent); err != nil {
+		t.Fatalf("ambient reviewer agent not installed: %v", err)
+	}
+	t.Setenv("HOME", ambientHome)
+	t.Setenv("USERPROFILE", ambientHome)
+
+	if got := reviewVSCodeReviewerAgentStatus(); got == reviewVSCodeReviewerAgentInstalled {
+		t.Fatal("the gate read the ambient HOME instead of the package's hermetic seam")
+	}
+	if capability := reviewImmutableRuntimeCapability(model.AgentVSCodeCopilot); capability.Eligible {
+		t.Fatalf("vscode-copilot is eligible from the ambient HOME: %#v", capability)
+	}
+}
+
 // TestVSCodeReviewerAgentGuidanceStaysScoped keeps the sync remedy on
 // vscode-copilot alone and keeps every other runtime's refusal unchanged.
 func TestVSCodeReviewerAgentGuidanceStaysScoped(t *testing.T) {

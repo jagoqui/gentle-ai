@@ -1,6 +1,7 @@
 package vscode
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -126,4 +127,95 @@ func TestClaudeMixingAdvisoryListsOnlyUnhandledSettings(t *testing.T) {
 	if ClaudeMixingAdvisory(nil) != "" {
 		t.Fatal("advisory without findings must be empty")
 	}
+}
+
+// TestClaudeConfigMixingAcceptsEquivalentLocationKeys treats every spelling VS
+// Code resolves to the same Claude folder as the disabling key: tilde, workspace
+// relative, and the absolute home path with either separator, each with or
+// without a trailing separator, for both the agents and the skills setting.
+func TestClaudeConfigMixingAcceptsEquivalentLocationKeys(t *testing.T) {
+	sources := []struct {
+		name    string
+		home    claudeHomeFixture
+		setting string
+		folder  string
+		source  ClaudeMixingSource
+	}{
+		{name: "agents", home: claudeHomeFixture{agents: true}, setting: settingAgentFilesLocations, folder: "agents", source: ClaudeMixingAgents},
+		{name: "skills", home: claudeHomeFixture{skills: true}, setting: settingAgentSkillsLocations, folder: "skills", source: ClaudeMixingSkills},
+	}
+	variants := []struct {
+		name string
+		key  func(home, folder string) string
+	}{
+		{name: "tilde", key: func(_, folder string) string { return "~/.claude/" + folder }},
+		{name: "tilde trailing slash", key: func(_, folder string) string { return "~/.claude/" + folder + "/" }},
+		{name: "workspace relative", key: func(_, folder string) string { return ".claude/" + folder }},
+		{name: "workspace relative trailing slash", key: func(_, folder string) string { return ".claude/" + folder + "/" }},
+		{name: "absolute home", key: func(home, folder string) string { return filepath.Join(home, ".claude", folder) }},
+		{name: "absolute home trailing separator", key: func(home, folder string) string {
+			return filepath.Join(home, ".claude", folder) + string(filepath.Separator)
+		}},
+		{name: "absolute home forward slashes", key: func(home, folder string) string {
+			return filepath.ToSlash(filepath.Join(home, ".claude", folder))
+		}},
+		{name: "absolute home forward slashes trailing slash", key: func(home, folder string) string {
+			return filepath.ToSlash(filepath.Join(home, ".claude", folder)) + "/"
+		}},
+		{name: "absolute home backslashes", key: func(home, folder string) string {
+			return strings.ReplaceAll(filepath.ToSlash(filepath.Join(home, ".claude", folder)), "/", `\`)
+		}},
+		{name: "absolute home backslashes trailing backslash", key: func(home, folder string) string {
+			return strings.ReplaceAll(filepath.ToSlash(filepath.Join(home, ".claude", folder)), "/", `\`) + `\`
+		}},
+	}
+	for _, src := range sources {
+		for _, variant := range variants {
+			t.Run(src.name+"/"+variant.name, func(t *testing.T) {
+				home := writeClaudeHome(t, src.home)
+				settings := mixingLocationSettings(t, src.setting, variant.key(home, src.folder), false)
+				if got := ClaudeConfigMixing(home, settings); len(got) != 0 {
+					t.Fatalf("findings = %v, want none for key %q", findingSources(got), variant.key(home, src.folder))
+				}
+			})
+		}
+	}
+}
+
+// TestClaudeConfigMixingRejectsNonEquivalentLocationKeys keeps keys that do
+// not name the user's Claude folder from silencing the advisory.
+func TestClaudeConfigMixingRejectsNonEquivalentLocationKeys(t *testing.T) {
+	for _, src := range []struct {
+		name    string
+		home    claudeHomeFixture
+		setting string
+		folder  string
+		source  ClaudeMixingSource
+	}{
+		{name: "agents", home: claudeHomeFixture{agents: true}, setting: settingAgentFilesLocations, folder: "agents", source: ClaudeMixingAgents},
+		{name: "skills", home: claudeHomeFixture{skills: true}, setting: settingAgentSkillsLocations, folder: "skills", source: ClaudeMixingSkills},
+	} {
+		for _, key := range []func(home string) string{
+			func(string) string { return "~/.claude" },
+			func(string) string { return "~/.github/" + src.folder },
+			func(home string) string { return filepath.Join(home, "other", ".claude", src.folder) },
+			func(home string) string { return filepath.Join(filepath.Dir(home), ".claude", src.folder) },
+		} {
+			home := writeClaudeHome(t, src.home)
+			settings := mixingLocationSettings(t, src.setting, key(home), false)
+			got := findingSources(ClaudeConfigMixing(home, settings))
+			if !reflect.DeepEqual(got, []ClaudeMixingSource{src.source}) {
+				t.Fatalf("%s key %q: sources = %v, want %v", src.name, key(home), got, []ClaudeMixingSource{src.source})
+			}
+		}
+	}
+}
+
+func mixingLocationSettings(t *testing.T, setting, key string, enabled bool) []byte {
+	t.Helper()
+	settings, err := json.Marshal(map[string]any{setting: map[string]any{key: enabled}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return settings
 }

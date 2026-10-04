@@ -2,6 +2,7 @@ package vscode
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -62,7 +63,7 @@ func ClaudeConfigMixing(home string, settingsJSONC []byte) []ClaudeMixingFinding
 	}
 
 	agentsDir := filepath.Join(claudeDir, "agents")
-	if dirHasMarkdown(agentsDir) && !locationDisabled(settings[settingAgentFilesLocations], "~/.claude/agents", ".claude/agents") {
+	if dirHasMarkdown(agentsDir) && !locationDisabled(settings[settingAgentFilesLocations], home, "agents") {
 		findings = append(findings, ClaudeMixingFinding{
 			Source:  ClaudeMixingAgents,
 			Path:    agentsDir,
@@ -71,7 +72,7 @@ func ClaudeConfigMixing(home string, settingsJSONC []byte) []ClaudeMixingFinding
 	}
 
 	skillsDir := filepath.Join(claudeDir, "skills")
-	if dirNonEmpty(skillsDir) && !locationDisabled(settings[settingAgentSkillsLocations], "~/.claude/skills") {
+	if dirNonEmpty(skillsDir) && !locationDisabled(settings[settingAgentSkillsLocations], home, "skills") {
 		findings = append(findings, ClaudeMixingFinding{
 			Source:  ClaudeMixingSkills,
 			Path:    skillsDir,
@@ -102,20 +103,43 @@ func isFalse(value any) bool {
 	return ok && !b
 }
 
-func locationDisabled(value any, keys ...string) bool {
+// locationDisabled reports whether a chat.*Locations map disables the Claude
+// folder <home>/.claude/<folder> under any spelling VS Code resolves to it:
+// `~/.claude/<folder>`, workspace-relative `.claude/<folder>`, or the absolute
+// home path, with either separator and with or without a trailing one. Keys
+// are compared exactly after separator normalization and cleaning.
+func locationDisabled(value any, home, folder string) bool {
 	locations, ok := value.(map[string]any)
 	if !ok {
 		return false
 	}
+	equivalent := []string{"~/.claude/" + folder, ".claude/" + folder}
+	if strings.TrimSpace(home) != "" {
+		equivalent = append(equivalent, normalizeLocationKey(filepath.Join(home, ".claude", folder)))
+	}
 	for key, enabled := range locations {
-		normalized := strings.TrimRight(strings.TrimSpace(key), "/")
-		for _, want := range keys {
-			if normalized == want && isFalse(enabled) {
+		if !isFalse(enabled) {
+			continue
+		}
+		normalized := normalizeLocationKey(key)
+		for _, want := range equivalent {
+			if normalized == want {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// normalizeLocationKey turns a settings location key into slash form without
+// trailing separators, so `C:\Users\me\.claude\agents\` and
+// `C:/Users/me/.claude/agents` compare equal on every host.
+func normalizeLocationKey(key string) string {
+	slashed := strings.ReplaceAll(strings.TrimSpace(key), `\`, "/")
+	if slashed == "" {
+		return ""
+	}
+	return path.Clean(slashed)
 }
 
 func isRegularFile(path string) bool {

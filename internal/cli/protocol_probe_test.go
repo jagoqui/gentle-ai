@@ -144,6 +144,17 @@ func TestMain(m *testing.M) {
 	if err := os.Setenv("USERPROFILE", testHome); err != nil {
 		panic(err)
 	}
+	// The vscode-copilot eligibility gate defaults to os.UserHomeDir and is
+	// consulted whenever runtime capability is enumerated. Pin its seam to a
+	// dedicated empty home for the whole binary so no result depends on HOME
+	// (which individual tests re-point and populate) or on whether the
+	// machine synced the managed reviewer; tests that need an installed agent
+	// opt in through installVSCodeReviewerAgentForTest.
+	vscodeReviewerAgentHome, err := os.MkdirTemp("", "gentle-ai-cli-vscode-reviewer-home-*")
+	if err != nil {
+		panic(err)
+	}
+	reviewVSCodeReviewerAgentHome = func() (string, error) { return vscodeReviewerAgentHome, nil }
 
 	verifyEngramVersion = func() (string, error) {
 		return "", errors.New("engram version not available in tests")
@@ -181,5 +192,6 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 	_ = os.RemoveAll(testHome)
+	_ = os.RemoveAll(vscodeReviewerAgentHome)
 	os.Exit(code)
 }

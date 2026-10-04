@@ -65,6 +65,9 @@ No Node, no CLI: everything on the gentle-ai side is Go.
   (`chat.useClaudeMd: false`, `chat.agentFilesLocations["~/.claude/agents"]: false`,
   `chat.agentSkillsLocations["~/.claude/skills"]: false`), report an advisory with the exact settings. Never edit
   the user's settings automatically. Route: delegated direct.
+- [x] T8 — Fourth review follow-ups (user-authorized 2026-10-04): make the vscode reviewer-agent gate hermetic in
+  tests (no test reads the real user home); accept equivalent location keys for agents and skills (`~/`, workspace
+  relative, absolute home path) in the Claude mixing advisory. Route: delegated direct.
 - [ ] T3 — Organic proof in VS Code Copilot Chat: positive capture and zero-tools confirmation. Pending: user env.
 
 ## Acceptance criteria
@@ -173,6 +176,22 @@ No Node, no CLI: everything on the gentle-ai side is Go.
   `vscode.Adapter.SettingsPath`; read-only (never writes settings.json); no exit-code change. TUI install path not
   covered (CLI only). Checks: gofmt clean; `go vet ./internal/...` clean; agents/components 3228 passed (40 pkgs);
   `go test ./internal/cli/...` 3166 passed.
+- T8 (delegated writer, uncommitted): R3 gate hermeticity — RED observed: new
+  `TestVSCodeReviewerAgentGateIgnoresTheAmbientHomeInTests` (HOME/USERPROFILE pointed at a temp home holding the
+  real-installer managed `gentle-reviewer.agent.md`, no seam helper) failed: the gate read the ambient HOME. GREEN:
+  the package `TestMain` (`internal/cli/protocol_probe_test.go`) now pins `reviewVSCodeReviewerAgentHome` to a
+  dedicated empty temp dir for the whole binary (removed after `m.Run`); production default (`os.UserHomeDir`)
+  unchanged; `installVSCodeReviewerAgentForTest`/`useVSCodeReviewerAgentHome` still opt in. The CLI stand-in
+  re-exec branch is not pinned (it runs real dispatch against the captured env). R3 mixing keys — RED observed: 14
+  subtests of new `TestClaudeConfigMixingAcceptsEquivalentLocationKeys` failed (skills workspace-relative, absolute
+  home path variants for both sources). GREEN: `locationDisabled(value, home, folder)` accepts `~/.claude/<x>`,
+  `.claude/<x>` and `<home>/.claude/<x>` for agents and skills, comparing exactly after `\`→`/` and `path.Clean`
+  (trailing separators dropped; no case folding, no OS-aware helper exists). New
+  `TestClaudeConfigMixingRejectsNonEquivalentLocationKeys` keeps `~/.claude`, `~/.github/<x>`, a nested and a
+  parent-dir `.claude/<x>` from silencing the advisory; existing cases unchanged. Checks: gofmt clean;
+  `go vet ./internal/cli/... ./internal/agents/...` clean; `go test ./internal/agents/vscode/...` ok;
+  `go test ./internal/cli/...` 3167 passed; `go test ./internal/cli/ -run 'Capability|Runtime|Transport'` 366 passed
+  with HOME = a temp home synced with the managed reviewer and 366 passed with an empty temp home.
 
 ## Next step
 
