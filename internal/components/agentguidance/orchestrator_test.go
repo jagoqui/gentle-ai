@@ -458,6 +458,64 @@ func TestRenderOrchestratorOpenCodeCarriesConsentV3QuestionRoute(t *testing.T) {
 	}
 }
 
+// TestRenderOrchestratorVSCodeNamesODDAgents pins the VS Code Copilot
+// delegation route: both generic variants name the installed ODD agents and
+// the runSubagent agentName, while every other generic runtime keeps the
+// shared runtime-neutral sentence and never sees the VS Code agent names.
+func TestRenderOrchestratorVSCodeNamesODDAgents(t *testing.T) {
+	t.Parallel()
+
+	for _, capability := range []string{"", "small"} {
+		vscode, err := RenderOrchestratorWithSource(model.AgentVSCodeCopilot, nil, capability)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Count(vscode, vscodeDelegationRoute) != 1 {
+			t.Errorf("vscode-copilot %q render does not name the ODD agents exactly once", capability)
+		}
+		if strings.Contains(vscode, genericDelegationRoute) {
+			t.Errorf("vscode-copilot %q render kept the runtime-neutral delegation sentence", capability)
+		}
+	}
+	for _, agent := range []model.AgentID{model.AgentOpenClaw, model.AgentTrae} {
+		other, err := RenderOrchestratorWithSource(agent, nil, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(other, "Use the platform's native bounded worker for delegated-direct work.") {
+			t.Errorf("%s lost the runtime-neutral delegation sentence", agent)
+		}
+		for _, leaked := range []string{"gentle-ai-explore", "gentle-ai-worker", "gentle-ai-verify", "#tool:runSubagent"} {
+			if strings.Contains(other, leaked) {
+				t.Errorf("%s render carries VS Code wording %q", agent, leaked)
+			}
+		}
+	}
+	if !strings.Contains(vscodeDelegationRoute, "Route read-only mapping to `gentle-ai-explore`, bounded implementation to `gentle-ai-worker`, and command-running verification to `gentle-ai-verify`, each through `#tool:runSubagent` with that exact `agentName`.") {
+		t.Fatalf("vscode delegation route drifted: %q", vscodeDelegationRoute)
+	}
+}
+
+// TestReplaceVSCodeDelegationRouteFailsClosed proves a generic asset that lost
+// or duplicated its delegation anchor never ships a VS Code prompt without the
+// ODD agent route, and that other runtimes pass through untouched.
+func TestReplaceVSCodeDelegationRouteFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	for _, malformed := range []string{
+		"no anchor at all",
+		genericDelegationRoute + "\n" + genericDelegationRoute,
+		genericDelegationRoute + "\n" + genericSmallDelegationAnchor,
+	} {
+		if _, err := replaceVSCodeDelegationRoute(malformed, model.AgentVSCodeCopilot); err == nil {
+			t.Errorf("malformed anchors %q rendered", malformed)
+		}
+	}
+	if got, err := replaceVSCodeDelegationRoute("no anchor at all", model.AgentOpenClaw); err != nil || got != "no anchor at all" {
+		t.Fatalf("non-vscode content changed: %q, %v", got, err)
+	}
+}
+
 // Not parallel: it swaps the package-level contract source and restores it
 // before any parallel test resumes.
 func TestRenderOrchestratorFailsClosedWithoutReviewContractSource(t *testing.T) {

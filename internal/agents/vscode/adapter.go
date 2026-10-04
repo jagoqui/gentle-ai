@@ -169,9 +169,10 @@ func (a *Adapter) SupportsSubAgents() bool {
 // default entry of VS Code's `chat.agentFilesLocations`, where Copilot Chat
 // discovers user `*.agent.md` custom agents. Like the skills folder it hangs
 // off GlobalConfigDir, so it never follows XDG_CONFIG_HOME or APPDATA, which
-// relocate only the VS Code user profile. Only the native RDD relay reviewer
-// installs here (reviewassets.NativeAgentManifest); SupportsSubAgents stays
-// false, so SDD file sub-agents never target this folder.
+// relocate only the VS Code user profile. Only the native agents in
+// reviewassets.NativeAgentManifest (the RDD relay reviewer and the ODD
+// explorer, verifier, and bounded writer) install here; SupportsSubAgents
+// stays false, so generic file sub-agents never target this folder.
 func (a *Adapter) SubAgentsDir(homeDir string) string {
 	return filepath.Join(a.GlobalConfigDir(homeDir), "agents")
 }

@@ -42,7 +42,7 @@ const VSCodeReviewerAgentName = "gentle-reviewer"
 // Copilot user agents folder (agents.Adapter.SubAgentsDir) for the reviewer.
 const VSCodeReviewerAgentFileName = VSCodeReviewerAgentName + ".agent.md"
 
-const vscodeCapture = "For each returned `review.capture-result` input, relay one isolated reviewer through VS Code Copilot Chat. " +
+const vscodeCapture = "For every returned `review.capture-result`, `review.capture-refuter`, and `review.capture-validation` input, relay one isolated reviewer, refuter, or targeted validator through VS Code Copilot Chat; all three roles use the same flow. " +
 	"First run the input's exact capture operation in the terminal with its argument tokens exactly as returned; those tokens carry `--agent=vscode-copilot --materialize=true`, so the run only prints the raw Go-materialized reviewer prompt bytes and captures nothing. " +
 	"Then invoke the `#tool:runSubagent` tool once with `agentName: \"" + VSCodeReviewerAgentName + "\"`, passing those printed bytes verbatim as its `prompt`. " +
 	"Write that subagent's single final message verbatim, as BOM-less UTF-8, to a scratch file outside the repository worktree, then run the input's exact `submission` operation and argument tokens with that file path substituted only into its `--input` value. " +

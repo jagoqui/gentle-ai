@@ -71,8 +71,10 @@ func TestVSCodeReviewerAgentNameMatchesContract(t *testing.T) {
 	if !strings.Contains(contract, "`agentName: \""+VSCodeReviewerAgentName+"\"`") {
 		t.Fatalf("vscode-copilot contract does not relay agentName %q", VSCodeReviewerAgentName)
 	}
-	if got := NativeAgentManifest[model.AgentVSCodeCopilot]; len(got) != 1 || got[0] != VSCodeReviewerAgentName+".agent.md" {
-		t.Fatalf("vscode-copilot native agents = %v, want only %s.agent.md", got, VSCodeReviewerAgentName)
+	// The full Copilot manifest (reviewer plus the ODD trio) is pinned by
+	// TestVSCodeNativeAgentManifestShipsReviewerAndODDAgents.
+	if got := NativeAgentManifest[model.AgentVSCodeCopilot]; !containsName(got, VSCodeReviewerAgentName+".agent.md") {
+		t.Fatalf("vscode-copilot native agents = %v, want %s.agent.md among them", got, VSCodeReviewerAgentName)
 	}
 	for agent, names := range NativeAgentManifest {
 		if agent != model.AgentVSCodeCopilot && containsName(names, VSCodeReviewerAgentName+".agent.md") {
@@ -124,9 +126,7 @@ func TestInstallNativeAgentsWritesVSCodeReviewerVerbatim(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
-		switch entry.Name() {
-		case "gentle-reviewer.agent.md", OwnershipLedgerFilename:
-		default:
+		if entry.Name() != OwnershipLedgerFilename && !containsName(NativeAgentManifest[model.AgentVSCodeCopilot], entry.Name()) {
 			t.Errorf("vscode native install wrote unexpected %s", entry.Name())
 		}
 	}
@@ -169,8 +169,8 @@ func TestManagedVSCodeReviewerAgentIsTheInstalledRender(t *testing.T) {
 }
 
 // TestInstallNativeAgentsPreservesVSCodeAgentsFolderUserFiles proves the
-// native installer touches only the managed reviewer and its ownership ledger
-// in the shared Copilot user agents folder: a user's own custom agents stay
+// native installer touches only its managed agents (the reviewer and the ODD
+// trio) and their ownership ledger in the shared Copilot user agents folder: a user's own custom agents stay
 // byte-identical across a first install, a managed-file refresh, and an
 // idempotent re-run.
 func TestInstallNativeAgentsPreservesVSCodeAgentsFolderUserFiles(t *testing.T) {
@@ -208,7 +208,7 @@ func TestInstallNativeAgentsPreservesVSCodeAgentsFolderUserFiles(t *testing.T) {
 			if _, user := userFiles[entry.Name()]; user {
 				continue
 			}
-			if entry.Name() != VSCodeReviewerAgentFileName && entry.Name() != OwnershipLedgerFilename {
+			if entry.Name() != OwnershipLedgerFilename && !containsName(NativeAgentManifest[model.AgentVSCodeCopilot], entry.Name()) {
 				t.Fatalf("%s: unexpected file %s in the agents folder", stage, entry.Name())
 			}
 		}

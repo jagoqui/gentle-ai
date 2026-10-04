@@ -45,6 +45,8 @@ func TestVSCodeCopilotContractRelaysOneSequentialSubagent(t *testing.T) {
 	}
 	for _, want := range []string{
 		"`--agent=vscode-copilot --materialize=true`",
+		// The refuter and targeted validator ride the same relay as lenses.
+		"For every returned `review.capture-result`, `review.capture-refuter`, and `review.capture-validation` input",
 		"`#tool:runSubagent`",
 		"`agentName: \"gentle-reviewer\"`",
 		"BOM-less UTF-8",

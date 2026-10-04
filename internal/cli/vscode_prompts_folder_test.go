@@ -24,8 +24,8 @@ import (
 // folder (SystemPromptDir), which also holds gentle-ai.instructions.md and the
 // user's own prompts. These tests drive every flow reachable for
 // vscode-copilot that resolves either folder and prove only the managed
-// reviewer (and its ownership ledger) is ever created, updated, snapshotted,
-// or removed there: the owned prompts-folder reviewer is migrated away, and
+// native agents (the reviewer and the ODD trio, plus their ownership ledger)
+// are ever created, updated, snapshotted, or removed there: the owned prompts-folder reviewer is migrated away, and
 // everything else stays put.
 
 var vscodePromptsFolderUserFiles = map[string]string{
@@ -127,7 +127,15 @@ func TestVSCodePromptsFolderInstallAndSyncTouchOnlyTheManagedReviewer(t *testing
 			}
 			// The owned prompts-folder reviewer and its ledger migrated away.
 			assertVSCodeFolderHoldsOnly(t, prompts, append(slices.Collect(maps.Keys(vscodePromptsFolderUserFiles)), "gentle-ai.instructions.md"), flow)
-			assertVSCodeFolderHoldsOnly(t, agentsDir, append(slices.Collect(maps.Keys(vscodeAgentsFolderUserFiles)), reviewassets.VSCodeReviewerAgentFileName, reviewassets.OwnershipLedgerFilename), flow)
+			// The agents folder holds the user's agents plus exactly the
+			// managed native agents (reviewer and ODD trio) and their ledger.
+			managed := reviewassets.NativeAgentManifest[model.AgentVSCodeCopilot]
+			for _, name := range managed {
+				if _, err := os.Stat(filepath.Join(agentsDir, name)); err != nil {
+					t.Fatalf("%s: managed agent %s not installed: %v", flow, name, err)
+				}
+			}
+			assertVSCodeFolderHoldsOnly(t, agentsDir, append(append(slices.Collect(maps.Keys(vscodeAgentsFolderUserFiles)), managed...), reviewassets.OwnershipLedgerFilename), flow)
 		})
 	}
 }
@@ -151,7 +159,7 @@ func TestVSCodePromptsFolderBackupTargetsNameOnlyManagedFiles(t *testing.T) {
 	}
 	folders := map[string][]string{
 		prompts:   {reviewassets.VSCodeReviewerAgentFileName, reviewassets.OwnershipLedgerFilename, "gentle-ai.instructions.md"},
-		agentsDir: {reviewassets.VSCodeReviewerAgentFileName, reviewassets.OwnershipLedgerFilename},
+		agentsDir: append(slices.Clone(reviewassets.NativeAgentManifest[model.AgentVSCodeCopilot]), reviewassets.OwnershipLedgerFilename),
 	}
 	for flow, targets := range map[string][]string{"install": installTargets, "sync": syncTargets} {
 		for dir, managed := range folders {
@@ -166,7 +174,11 @@ func TestVSCodePromptsFolderBackupTargetsNameOnlyManagedFiles(t *testing.T) {
 					t.Fatalf("%s snapshots non-managed file %s", flow, target)
 				}
 			}
-			for _, want := range []string{reviewassets.VSCodeReviewerAgentFileName, reviewassets.OwnershipLedgerFilename} {
+			required := []string{reviewassets.VSCodeReviewerAgentFileName, reviewassets.OwnershipLedgerFilename}
+			if dir == agentsDir {
+				required = managed
+			}
+			for _, want := range required {
 				if !slices.Contains(targets, filepath.Join(dir, want)) {
 					t.Fatalf("%s snapshot omits the managed %s in %s", flow, want, dir)
 				}

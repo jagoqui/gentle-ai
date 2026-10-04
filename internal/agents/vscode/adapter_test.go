@@ -158,8 +158,8 @@ func TestMCPConfigPathUsesVSCodeUserProfile(t *testing.T) {
 	}
 }
 
-// TestSubAgentsDirIsCopilotUserAgentsFolder pins where the RDD relay reviewer
-// custom agent lands: `~/.copilot/agents`, a default entry of VS Code's
+// TestSubAgentsDirIsCopilotUserAgentsFolder pins where the native custom
+// agents (RDD relay reviewer and ODD trio) land: `~/.copilot/agents`, a default entry of VS Code's
 // `chat.agentFilesLocations` user agent folders. It is anchored to the home
 // directory on every OS and never follows XDG_CONFIG_HOME or APPDATA, which
 // only relocate the VS Code user profile. SDD file sub-agents stay unsupported.
@@ -168,7 +168,7 @@ func TestSubAgentsDirIsCopilotUserAgentsFolder(t *testing.T) {
 	home := t.TempDir()
 
 	if a.SupportsSubAgents() {
-		t.Fatal("SupportsSubAgents() = true; only the native RDD reviewer installs here")
+		t.Fatal("SupportsSubAgents() = true; only the managed native agents install here")
 	}
 	if got, want := a.EmbeddedSubAgentsDir(), "vscode/agents"; got != want {
 		t.Fatalf("EmbeddedSubAgentsDir() = %q, want %q", got, want)

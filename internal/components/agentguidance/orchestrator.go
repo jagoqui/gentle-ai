@@ -202,6 +202,10 @@ func RenderOrchestratorWithSource(agent model.AgentID, source ReviewContractSour
 		if err != nil {
 			return "", fmt.Errorf("render orchestrator for %q: %w", agent, err)
 		}
+		content, err = replaceVSCodeDelegationRoute(content, agent)
+		if err != nil {
+			return "", fmt.Errorf("render orchestrator for %q: %w", agent, err)
+		}
 	}
 
 	rdd := model.SupportsReceiptDrivenDevelopment(agent)
@@ -407,6 +411,37 @@ func replaceOpenCodeConsentV3QuestionRoute(content string, agent model.AgentID) 
 	}
 	content = strings.Replace(content, openCodeNativeQuestionSourceRoute, openCodeConsentV3QuestionRoute, 1)
 	return strings.ReplaceAll(content, openCodeFallbackSourceClause, openCodeConsentV3FallbackClause), nil
+}
+
+// genericDelegationRoute is the capable generic variant's runtime-neutral
+// delegation sentence; genericSmallDelegationAnchor opens the small variant's
+// closing delegation paragraph, which has no such sentence.
+const (
+	genericDelegationRoute       = "Use the platform's native bounded worker for delegated-direct work."
+	genericSmallDelegationAnchor = "When delegating to sub-agents, pass `## Skills to load before work`"
+)
+
+// vscodeDelegationRoute names the ODD agents reviewassets installs into the
+// Copilot agents folder and the runSubagent agentName that reaches each one.
+const vscodeDelegationRoute = "Route read-only mapping to `gentle-ai-explore`, bounded implementation to `gentle-ai-worker`, and command-running verification to `gentle-ai-verify`, each through `#tool:runSubagent` with that exact `agentName`."
+
+// replaceVSCodeDelegationRoute specializes the shared generic orchestrator for
+// VS Code Copilot at render time, so the generic asset stays byte-identical for
+// every other runtime that selects it. The capable variant's neutral sentence
+// is replaced; the small variant gains the route ahead of its delegation
+// paragraph. A selected variant without exactly one anchor fails closed.
+func replaceVSCodeDelegationRoute(content string, agent model.AgentID) (string, error) {
+	if agent != model.AgentVSCodeCopilot {
+		return content, nil
+	}
+	capable, small := strings.Count(content, genericDelegationRoute), strings.Count(content, genericSmallDelegationAnchor)
+	switch {
+	case capable == 1 && small == 0:
+		return strings.Replace(content, genericDelegationRoute, vscodeDelegationRoute, 1), nil
+	case capable == 0 && small == 1:
+		return strings.Replace(content, genericSmallDelegationAnchor, vscodeDelegationRoute+"\n\n"+genericSmallDelegationAnchor, 1), nil
+	}
+	return "", fmt.Errorf("VS Code delegation route anchors: capable %d, small %d; want exactly one", capable, small)
 }
 
 // injectOrchestratorSection merges the orchestrator block into existing

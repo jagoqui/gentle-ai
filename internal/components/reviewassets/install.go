@@ -27,8 +27,11 @@ var NativeAgentManifest = map[model.AgentID][]string{
 	model.AgentKiroIDE:    {"jd-fix-agent.md", "jd-judge-a.md", "jd-judge-b.md"},
 	model.AgentKimi:       {"gentleman.yaml"},
 	// The VS Code relay reviewer is tool-less and installs verbatim (see
-	// renderNativeAgent); it is the only agent written to the Copilot agents folder.
-	model.AgentVSCodeCopilot: {VSCodeReviewerAgentFileName},
+	// renderNativeAgent). The ODD worker trio (explorer, verifier, bounded
+	// writer) mirrors OpenCode's gentle-ai-* agents and, like them, ships
+	// unconditionally because ODD is every runtime's default workflow; it
+	// renders with the usual guidance and language-contract injection.
+	model.AgentVSCodeCopilot: {VSCodeReviewerAgentFileName, "gentle-ai-explore.agent.md", "gentle-ai-verify.agent.md", "gentle-ai-worker.agent.md"},
 }
 
 // RetiredNativeAgentManifest lists the review agents earlier releases installed
@@ -121,7 +124,8 @@ type claudeModelResolver interface {
 	ClaudeModelID(model.ClaudeModelAlias) string
 }
 
-// InstallNativeAgents installs only retained review, Judgment Day, and Kimi native agents.
+// InstallNativeAgents installs only retained review, Judgment Day, Kimi, and
+// VS Code Copilot ODD native agents.
 // It never removes legacy SDD files or user-owned agents; it removes only the
 // retired review agents Gentle AI owns (see RetiredNativeAgentManifest) and,
 // once the current directory is installed, the owned copies an earlier release
