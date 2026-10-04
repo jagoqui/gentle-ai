@@ -104,16 +104,18 @@ func isFalse(value any) bool {
 }
 
 // locationDisabled reports whether a chat.*Locations map disables the Claude
-// folder <home>/.claude/<folder> under any spelling VS Code resolves to it:
-// `~/.claude/<folder>`, workspace-relative `.claude/<folder>`, or the absolute
-// home path, with either separator and with or without a trailing one. Keys
-// are compared exactly after separator normalization and cleaning.
+// folder <home>/.claude/<folder> under a spelling VS Code resolves to the user
+// home: `~/.claude/<folder>` or the absolute home path, with either separator
+// and with or without a trailing one. Workspace-relative keys such as
+// `.claude/<folder>` resolve against the open workspace, not the user home, so
+// they never count. Keys are compared exactly after separator normalization
+// and cleaning.
 func locationDisabled(value any, home, folder string) bool {
 	locations, ok := value.(map[string]any)
 	if !ok {
 		return false
 	}
-	equivalent := []string{"~/.claude/" + folder, ".claude/" + folder}
+	equivalent := []string{"~/.claude/" + folder}
 	if strings.TrimSpace(home) != "" {
 		equivalent = append(equivalent, normalizeLocationKey(filepath.Join(home, ".claude", folder)))
 	}

@@ -75,7 +75,8 @@ func TestClaudeConfigMixing(t *testing.T) {
 }`,
 			want: nil,
 		},
-		{name: "workspace relative agents key accepted", home: claudeHomeFixture{agents: true}, settings: `{"chat.agentFilesLocations": {".claude/agents": false}}`, want: nil},
+		{name: "workspace relative agents key keeps home agents", home: claudeHomeFixture{agents: true}, settings: `{"chat.agentFilesLocations": {".claude/agents": false}}`, want: []ClaudeMixingSource{ClaudeMixingAgents}},
+		{name: "workspace relative skills key keeps home skills", home: claudeHomeFixture{skills: true}, settings: `{"chat.agentSkillsLocations": {".claude/skills": false}}`, want: []ClaudeMixingSource{ClaudeMixingSkills}},
 		{name: "claude md disabled only", home: all, settings: `{"chat.useClaudeMd": false}`, want: []ClaudeMixingSource{ClaudeMixingAgents, ClaudeMixingSkills}},
 		{name: "enabled values are not handled", home: all, settings: `{"chat.useClaudeMd": true, "chat.agentFilesLocations": {"~/.claude/agents": true}, "chat.agentSkillsLocations": {"~/.claude/skills": "false"}}`, want: allSources},
 		{name: "unparseable settings fall back to defaults", home: all, settings: `{"chat.useClaudeMd": false,,, nope`, want: allSources},
@@ -130,9 +131,9 @@ func TestClaudeMixingAdvisoryListsOnlyUnhandledSettings(t *testing.T) {
 }
 
 // TestClaudeConfigMixingAcceptsEquivalentLocationKeys treats every spelling VS
-// Code resolves to the same Claude folder as the disabling key: tilde, workspace
-// relative, and the absolute home path with either separator, each with or
-// without a trailing separator, for both the agents and the skills setting.
+// Code resolves to the user-home Claude folder as the disabling key: tilde and
+// the absolute home path with either separator, each with or without a
+// trailing separator, for both the agents and the skills setting.
 func TestClaudeConfigMixingAcceptsEquivalentLocationKeys(t *testing.T) {
 	sources := []struct {
 		name    string
@@ -150,8 +151,6 @@ func TestClaudeConfigMixingAcceptsEquivalentLocationKeys(t *testing.T) {
 	}{
 		{name: "tilde", key: func(_, folder string) string { return "~/.claude/" + folder }},
 		{name: "tilde trailing slash", key: func(_, folder string) string { return "~/.claude/" + folder + "/" }},
-		{name: "workspace relative", key: func(_, folder string) string { return ".claude/" + folder }},
-		{name: "workspace relative trailing slash", key: func(_, folder string) string { return ".claude/" + folder + "/" }},
 		{name: "absolute home", key: func(home, folder string) string { return filepath.Join(home, ".claude", folder) }},
 		{name: "absolute home trailing separator", key: func(home, folder string) string {
 			return filepath.Join(home, ".claude", folder) + string(filepath.Separator)
@@ -183,7 +182,9 @@ func TestClaudeConfigMixingAcceptsEquivalentLocationKeys(t *testing.T) {
 }
 
 // TestClaudeConfigMixingRejectsNonEquivalentLocationKeys keeps keys that do
-// not name the user's Claude folder from silencing the advisory.
+// not name the user's Claude folder from silencing the advisory. Workspace
+// relative keys resolve against the open workspace in VS Code, not the user
+// home, so they leave <home>/.claude/<folder> loaded.
 func TestClaudeConfigMixingRejectsNonEquivalentLocationKeys(t *testing.T) {
 	for _, src := range []struct {
 		name    string
@@ -198,6 +199,10 @@ func TestClaudeConfigMixingRejectsNonEquivalentLocationKeys(t *testing.T) {
 		for _, key := range []func(home string) string{
 			func(string) string { return "~/.claude" },
 			func(string) string { return "~/.github/" + src.folder },
+			func(string) string { return ".claude/" + src.folder },
+			func(string) string { return ".claude/" + src.folder + "/" },
+			func(string) string { return "./.claude/" + src.folder },
+			func(string) string { return `.claude\` + src.folder },
 			func(home string) string { return filepath.Join(home, "other", ".claude", src.folder) },
 			func(home string) string { return filepath.Join(filepath.Dir(home), ".claude", src.folder) },
 		} {
