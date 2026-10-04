@@ -56,6 +56,10 @@ No Node, no CLI: everything on the gentle-ai side is Go.
   XDG_CONFIG_HOME/%APPDATA%), migrate the owned file out of the VS Code user prompts folder, gate checks the new path;
   (b) explicit `--materialize=true` capture for vscode-copilot re-checks the managed agent gate (`--input` submission
   stays ungated, Pi precedent). Route: delegated direct.
+- [x] T6 — Third review follow-ups (user-authorized 2026-10-04): R3-002 positive vscode refuter/validator
+  `--materialize=true` tests with the agent installed; R3-003 refusal guidance states the sync must be global
+  (workspace-scoped installs are ignored). R3-001 (runtime zero-tools) is closed only by T3 evidence, not code.
+  Route: delegated direct.
 - [ ] T3 — Organic proof in VS Code Copilot Chat: positive capture and zero-tools confirmation. Pending: user env.
 
 ## Acceptance criteria
@@ -138,6 +142,18 @@ No Node, no CLI: everything on the gentle-ai side is Go.
   ungated; Pi/OpenCode/Claude/Codex unaffected. Misleading capability comment fixed.
   Checks: gofmt clean; `go vet ./internal/...` clean; `go build ./...` ok; agents/components/model/reviewerprovider
   41 packages ok; `go test ./internal/cli/...` 3159 passed; `go test ./internal/update/...` 479 passed.
+- T6 (delegated writer, uncommitted): R3-003 RED observed: new `TestVSCodeReviewerAgentGuidanceNamesTheGlobalSyncScope`
+  failed (guidance lacked the scope). GREEN: the remedy is now `` `gentle-ai sync --agent <caller id> --scope global` ``
+  plus "(a workspace-scoped install is not used for review)"; `--scope global` is explicit so a
+  `GENTLE_AI_INSTALL_SCOPE=workspace` env cannot redirect it; runtime id still from the caller (#2440); no path
+  separators (privacy-gate test still green). R3-002: new `review_vscode_role_materialize_test.go` drives real
+  vscode-copilot lineages (Pi fixtures `piRefuterReview`, `providerCorrectionReadyWithoutVerificationEvidence`) with the
+  managed agent installed: STATUS renders `--agent=vscode-copilot --materialize=true` and a submission with
+  `--agent=vscode-copilot --input={{value}}`; the rendered prelude prints non-empty bytes equal to the Go-materialized
+  refuter/validator prompt (idempotent, no authority mutation); `--input` admits the refuter result and closes the
+  validator capture as approved. No production change needed for R3-002 (passed first run); mutation check (agent not
+  installed) made both fail at STATUS. Checks: gofmt clean; `go vet ./internal/cli/...` clean;
+  `go test ./internal/cli/...` 3162 passed.
 
 ## Next step
 

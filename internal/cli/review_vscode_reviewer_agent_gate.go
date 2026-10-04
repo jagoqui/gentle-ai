@@ -93,7 +93,8 @@ func reviewVSCodeReviewerAgentIsSoleMissingCondition(agent model.AgentID) bool {
 
 // reviewVSCodeReviewerAgentGuidance names the runnable remedy for the refused
 // runtime the caller declared (the sync command repeats that caller-supplied
-// identity rather than a compiled constant, per issue #2440). The installer
+// identity rather than a compiled constant, per issue #2440) at the global
+// scope the gate reads. The installer
 // preserves a reviewer file it does not own, so a modified file must be
 // removed before sync can reinstall the managed one. The prose carries no
 // path separators: it crosses reviewScrubDefectReportField, which would
@@ -101,7 +102,10 @@ func reviewVSCodeReviewerAgentIsSoleMissingCondition(agent model.AgentID) bool {
 func reviewVSCodeReviewerAgentGuidance(agent model.AgentID, state reviewVSCodeReviewerAgentState) string {
 	prefix := "; " + string(agent) + " is eligible only while the managed `" + reviewassets.VSCodeReviewerAgentFileName +
 		"` reviewer agent in the Copilot user agents folder is "
-	sync := "`gentle-ai sync --agent " + string(agent) + "`"
+	// The gate reads only the user-home folder, so the remedy pins the global
+	// scope explicitly: a bare sync could inherit GENTLE_AI_INSTALL_SCOPE, and
+	// a workspace-scoped install would leave the operator looping.
+	sync := "`gentle-ai sync --agent " + string(agent) + " --scope global` (a workspace-scoped install is not used for review)"
 	switch state {
 	case reviewVSCodeReviewerAgentModified:
 		return prefix + "byte-identical to the installed one, and it is modified; delete that file, run " + sync + ", and re-run"

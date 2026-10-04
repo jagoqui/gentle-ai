@@ -156,6 +156,21 @@ func TestVSCodeReviewerAgentGuidanceSurvivesTheFailureCausePrivacyGate(t *testin
 	}
 }
 
+// TestVSCodeReviewerAgentGuidanceNamesTheGlobalSyncScope keeps a
+// workspace-scope operator out of a loop: the gate reads only the Copilot user
+// agents folder, so the remedy pins `--scope global` explicitly (overriding
+// GENTLE_AI_INSTALL_SCOPE) and says a workspace-scoped install is not used.
+func TestVSCodeReviewerAgentGuidanceNamesTheGlobalSyncScope(t *testing.T) {
+	for _, state := range []reviewVSCodeReviewerAgentState{reviewVSCodeReviewerAgentMissing, reviewVSCodeReviewerAgentModified, reviewVSCodeReviewerAgentUnverifiable} {
+		guidance := reviewVSCodeReviewerAgentGuidance(model.AgentVSCodeCopilot, state)
+		for _, want := range []string{"`gentle-ai sync --agent vscode-copilot --scope global`", "workspace-scoped install is not used for review"} {
+			if !strings.Contains(guidance, want) {
+				t.Fatalf("%s guidance %q does not name %q", state, guidance, want)
+			}
+		}
+	}
+}
+
 // TestVSCodeCaptureBoundEligibilitySkipsTheReviewerAgentGate follows Pi's
 // capture-time precedent (#4256) for the bound `--input` submission: a capture
 // already carries its own frozen binding, so removing the reviewer agent
