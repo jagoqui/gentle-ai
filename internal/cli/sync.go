@@ -19,6 +19,7 @@ import (
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents"
 	opencodeagent "github.com/gentleman-programming/gentle-ai/v4/internal/agents/opencode"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/vscode"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/backup"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/agentguidance"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/communitytool"
@@ -92,6 +93,9 @@ type SyncResult struct {
 	// components touch the same file. It is nil when no files changed.
 	ChangedFiles  []string
 	ManualActions []string
+	// Advisories are non-blocking operator notices (no action is required
+	// for the sync to succeed); they never change the exit status.
+	Advisories []string
 
 	Background              OpenCodeBackgroundResolution
 	BackgroundPolicyEnabled bool
@@ -2053,6 +2057,7 @@ func runSyncWithSelectionScope(homeDir string, selection model.Selection, scope 
 	}
 	result.ManualActions = append(result.ManualActions, rt.state.nativeReviewActions...)
 	result.ManualActions = append(result.ManualActions, rt.skippedActions...)
+	result.Advisories = vscodeClaudeMixingAdvisories(homeDir, agentIDs)
 
 	// Capture how many managed assets were actually changed.
 	// Deduplicate paths — multiple components may touch the same file
@@ -2514,6 +2519,7 @@ func RenderSyncReport(result SyncResult) string {
 		renderSyncSkippedAgents(&b, result.SkippedAgents)
 		backgroundReport()
 		renderSyncManualActions(&b, result.ManualActions)
+		renderAdvisories(&b, result.Advisories)
 		return strings.TrimRight(b.String(), "\n")
 	}
 
@@ -2564,6 +2570,7 @@ func RenderSyncReport(result SyncResult) string {
 	}
 	backgroundReport()
 	renderSyncManualActions(&b, result.ManualActions)
+	renderAdvisories(&b, result.Advisories)
 
 	return strings.TrimRight(b.String(), "\n")
 }
@@ -2590,6 +2597,34 @@ func renderSyncManualActions(b *strings.Builder, actions []string) {
 	for _, action := range actions {
 		fmt.Fprintf(b, "- %s\n", action)
 	}
+}
+
+// renderAdvisories renders non-blocking operator notices. Multi-line
+// advisories keep their own indentation under the bullet.
+func renderAdvisories(b *strings.Builder, advisories []string) {
+	if len(advisories) == 0 {
+		return
+	}
+	fmt.Fprintln(b, "Advisories:")
+	for _, advisory := range advisories {
+		fmt.Fprintf(b, "- %s\n", advisory)
+	}
+}
+
+// vscodeClaudeMixingAdvisories reports, for a selection that includes
+// vscode-copilot, the Claude Code user configuration VS Code Copilot Chat
+// would mix in (see vscode.ClaudeConfigMixing). It only reads the VS Code
+// user settings.json; a missing or unreadable file means VS Code defaults.
+func vscodeClaudeMixingAdvisories(homeDir string, agents []model.AgentID) []string {
+	if !containsAgent(agents, model.AgentVSCodeCopilot) {
+		return nil
+	}
+	settings, _ := os.ReadFile(vscode.NewAdapter().SettingsPath(homeDir))
+	advisory := vscode.ClaudeMixingAdvisory(vscode.ClaudeConfigMixing(homeDir, settings))
+	if advisory == "" {
+		return nil
+	}
+	return []string{advisory}
 }
 
 // withFailedSyncVerificationNote replaces the generic

@@ -62,7 +62,10 @@ type InstallResult struct {
 	Dependencies  system.DependencyReport
 	PiCodeGraph   *communitytool.PiCodeGraphResult
 	ManualActions []string
-	DryRun        bool
+	// Advisories are non-blocking operator notices; they never change the
+	// exit status.
+	Advisories []string
+	DryRun     bool
 
 	Background              OpenCodeBackgroundResolution
 	BackgroundPolicyEnabled bool
@@ -261,6 +264,7 @@ func RunInstall(args []string, detection system.DetectionResult) (InstallResult,
 	}
 	result.PiCodeGraph = runtime.state.piCodeGraph
 	result.ManualActions = append(result.ManualActions, runtime.state.nativeReviewActions...)
+	result.Advisories = vscodeClaudeMixingAdvisories(homeDir, resolved.Agents)
 	result.Verify = runPostApplyVerification(postApplyVerificationInput{
 		HomeDir:      homeDir,
 		WorkspaceDir: runtime.workspaceDir,
@@ -2915,10 +2919,15 @@ func RenderInstallManualActions(result InstallResult) string {
 	if result.PiCodeGraph != nil {
 		actions = append(actions, result.PiCodeGraph.ManualActions...)
 	}
-	if len(actions) == 0 {
-		return ""
+	var b strings.Builder
+	if len(actions) > 0 {
+		b.WriteString("\nManual actions required:\n- " + strings.Join(actions, "\n- ") + "\n")
 	}
-	return "\nManual actions required:\n- " + strings.Join(actions, "\n- ") + "\n"
+	if len(result.Advisories) > 0 {
+		b.WriteString("\n")
+		renderAdvisories(&b, result.Advisories)
+	}
+	return b.String()
 }
 
 // ResolveInstallProfile returns the platform profile from detection, defaulting to darwin/brew.

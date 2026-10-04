@@ -60,6 +60,11 @@ No Node, no CLI: everything on the gentle-ai side is Go.
   `--materialize=true` tests with the agent installed; R3-003 refusal guidance states the sync must be global
   (workspace-scoped installs are ignored). R3-001 (runtime zero-tools) is closed only by T3 evidence, not code.
   Route: delegated direct.
+- [x] T7 — Claude config mixing advisory (user-authorized 2026-10-04): on vscode-copilot install/sync, when
+  `~/.claude/CLAUDE.md`, `~/.claude/agents` or `~/.claude/skills` exist and VS Code settings do not disable them
+  (`chat.useClaudeMd: false`, `chat.agentFilesLocations["~/.claude/agents"]: false`,
+  `chat.agentSkillsLocations["~/.claude/skills"]: false`), report an advisory with the exact settings. Never edit
+  the user's settings automatically. Route: delegated direct.
 - [ ] T3 — Organic proof in VS Code Copilot Chat: positive capture and zero-tools confirmation. Pending: user env.
 
 ## Acceptance criteria
@@ -154,6 +159,20 @@ No Node, no CLI: everything on the gentle-ai side is Go.
   validator capture as approved. No production change needed for R3-002 (passed first run); mutation check (agent not
   installed) made both fail at STATUS. Checks: gofmt clean; `go vet ./internal/cli/...` clean;
   `go test ./internal/cli/...` 3162 passed.
+- T7 (delegated writer, uncommitted): RED observed: vscode package compile failure (undefined `ClaudeConfigMixing`,
+  `ClaudeMixingSource`, ...), cli vet failure (undefined `SyncResult.Advisories`), then with field+render only, 3 cli
+  tests failed (sync/install printed no advisory; settings-disabled case). GREEN after implementation.
+  `internal/agents/vscode/claude_mixing.go`: pure `ClaudeConfigMixing(home, settingsJSONC)` checks
+  `~/.claude/CLAUDE.md` (regular file), `~/.claude/agents` (has `*.md`), `~/.claude/skills` (non-empty); parses
+  settings with `filemerge.UnmarshalJSONObject` (existing JSONC: comments + trailing commas); handled when
+  `chat.useClaudeMd` is false, `chat.agentFilesLocations` has `~/.claude/agents` or `.claude/agents` = false,
+  `chat.agentSkillsLocations` has `~/.claude/skills` = false; unparseable/missing settings = defaults.
+  `ClaudeMixingAdvisory` renders only the unhandled settings. CLI: new non-blocking `Advisories []string` on
+  `SyncResult`/`InstallResult`, rendered under `Advisories:` after manual actions (sync report, all paths; install via
+  `RenderInstallManualActions`), set only when vscode-copilot is selected; settings path from
+  `vscode.Adapter.SettingsPath`; read-only (never writes settings.json); no exit-code change. TUI install path not
+  covered (CLI only). Checks: gofmt clean; `go vet ./internal/...` clean; agents/components 3228 passed (40 pkgs);
+  `go test ./internal/cli/...` 3166 passed.
 
 ## Next step
 
