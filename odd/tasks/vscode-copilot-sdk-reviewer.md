@@ -150,3 +150,10 @@ Consent granted; review-reliability approved; acknowledged, authority burned. Ne
 - R3-vscode-subagentsdir-ignores-xdg: on Linux VS Code honors `XDG_CONFIG_HOME`; installer/gate pin `~/.config`.
 - R3-vscode-isolation-advertised-unproved: still requires T3 runtime zero-tools proof.
 - R3-vscode-materialize-ungated-at-capture: explicit `--materialize=true` capture bypasses the agent gate (STATUS offer is gated).
+
+## T5 review (lineage `review-0bcc02c652c8e507`, range main..4befa9f1)
+
+Consent granted; review-reliability approved; acknowledged, authority burned. Non-blocking follow-ups:
+- R3-001: immutable-executor advertisement still awaits T3 runtime zero-tools proof.
+- R3-002: no positive test for vscode refuter/validator `--materialize=true` with the agent installed.
+- R3-003: refusal guidance should say the sync must be global (workspace-scoped installs are ignored by the gate).
